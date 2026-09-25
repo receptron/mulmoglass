@@ -26,7 +26,7 @@
         <h1 class="text-4xl font-semibold">Welcome to MulmoGlass</h1>
         <p class="text-xl text-slate-300 max-w-3xl">
           Talk to an AI that shows its answers in front of you: images,
-          documents, charts, web pages, 3D models and games.
+          documents, charts, web pages and 3D models.
         </p>
         <p class="text-xl text-slate-300 max-w-3xl">
           MulmoGlass runs on
@@ -327,7 +327,7 @@ async function toggleChat() {
   await session.startChat();
 }
 
-// Views (a quiz answer, a game move) talk to the model as the user.
+// Views (a quiz answer, a form) talk to the model as the user.
 function sendTextFromView(text?: string) {
   if (text) console.info("[view] message", text);
   if (text) sendUserText(text);

@@ -273,11 +273,6 @@
     "@eslint/core" "^1.2.1"
     levn "^0.4.1"
 
-"@gui-chat-plugin/go@^2.0.0":
-  version "2.0.0"
-  resolved "https://registry.yarnpkg.com/@gui-chat-plugin/go/-/go-2.0.0.tgz#7e017dd05c00ee4b57f2fbbb801b9850cd58f102"
-  integrity sha512-A51Qo6NRKeECKwhpAsxDFg+lAhCFE6TCMz6cIhybnn/TvvhuOLDcqiKH2Syk+EQWsNJNwXZUc4SszNwvlUbwgQ==
-
 "@gui-chat-plugin/mindmap@^2.0.0":
   version "2.0.0"
   resolved "https://registry.yarnpkg.com/@gui-chat-plugin/mindmap/-/mindmap-2.0.0.tgz#a10be45cd7c5a51e341e9454e189f88084bd4acf"
@@ -285,27 +280,12 @@
   dependencies:
     jspdf "^4.0.0"
 
-"@gui-chat-plugin/othello@^2.0.0":
-  version "2.0.0"
-  resolved "https://registry.yarnpkg.com/@gui-chat-plugin/othello/-/othello-2.0.0.tgz#d2b7e60c8c4bed34f56287e945c69ebfab4e212e"
-  integrity sha512-by8yo32EII1sqWubyfbNTvE6U94Py132b5B/3FjNoblFjyu0HpwaVqMKLJmPIv6IZniZb5VQNbfuMP1ygG03rA==
-
 "@gui-chat-plugin/spreadsheet@^2.0.0":
   version "2.0.0"
   resolved "https://registry.yarnpkg.com/@gui-chat-plugin/spreadsheet/-/spreadsheet-2.0.0.tgz#1defff4a6322ab02d8f39a4eaa83a8728b0545e2"
   integrity sha512-sT6YVxCSo3mqeBRY7/vTuPmrDQgV4oMOh3T04oIjCwpMuuWQrcoDn7OKfBI/4qLyrXu7cLi8TMRYhDIUn/5Q0Q==
   dependencies:
     xlsx "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
-
-"@gui-chat-plugin/tictactoe@^2.0.0":
-  version "2.0.0"
-  resolved "https://registry.yarnpkg.com/@gui-chat-plugin/tictactoe/-/tictactoe-2.0.0.tgz#9dce9839529b27893bfb1d8f3dbdcf4b6fecc090"
-  integrity sha512-TXB8E+8PwzyL1zR6WZg19AXmBMNB/svGUYyTVsQLuNFoinxiLndPQIeVrUDwrtsbXZbNykuAQ+LseSyuRdFuGw==
-
-"@gui-chat-plugin/todo@^2.0.0":
-  version "2.0.0"
-  resolved "https://registry.yarnpkg.com/@gui-chat-plugin/todo/-/todo-2.0.0.tgz#fb0d644259407c1612758f837087f7efdf57a507"
-  integrity sha512-IjIjvugIE0CjYD9FLx9V8dPwEf0q0rjtL1+0uCO4TUx+PZICZ16UuOLYj4fRMZp7jHRuiJgz5A2caHPZNqmaqg==
 
 "@gui-chat-plugin/weather@^2.0.0":
   version "2.0.0"

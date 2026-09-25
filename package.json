@@ -16,12 +16,8 @@
     "deploy": "vite build && firebase deploy --only hosting"
   },
   "dependencies": {
-    "@gui-chat-plugin/go": "^2.0.0",
     "@gui-chat-plugin/mindmap": "^2.0.0",
-    "@gui-chat-plugin/othello": "^2.0.0",
     "@gui-chat-plugin/spreadsheet": "^2.0.0",
-    "@gui-chat-plugin/tictactoe": "^2.0.0",
-    "@gui-chat-plugin/todo": "^2.0.0",
     "@gui-chat-plugin/weather": "^2.0.0",
     "@mulmochat-plugin/generate-image": "^2.0.0",
     "@mulmochat-plugin/quiz": "^2.0.0",
