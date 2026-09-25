@@ -1,0 +1,46 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <!--
+      The shell presentHtml's View loads in its sandboxed iframe
+      (sandbox="allow-scripts", so this document has an opaque origin: no
+      access to the app's storage or keys). It asks the app for the page by
+      postMessage and writes it into this document, which keeps the policy
+      below. The CSP is MulmoChat's (server/plugins/htmlHost.ts), minus
+      `sandbox`, which the iframe attribute already applies: scripts, styles,
+      fonts, images and media only from these CDNs (plus data:/blob: for images
+      and media), and no fetch/XHR. Keep the CDNs in sync with
+      PRESENT_HTML_PROMPT (src/tools/index.ts).
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com https://cdnjs.cloudflare.com https://fonts.googleapis.com https://fonts.gstatic.com https://cdn.plot.ly; style-src 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com https://cdnjs.cloudflare.com https://fonts.googleapis.com https://fonts.gstatic.com https://cdn.plot.ly; font-src https://cdn.jsdelivr.net https://unpkg.com https://cdnjs.cloudflare.com https://fonts.googleapis.com https://fonts.gstatic.com https://cdn.plot.ly; img-src https://cdn.jsdelivr.net https://unpkg.com https://cdnjs.cloudflare.com https://fonts.googleapis.com https://fonts.gstatic.com https://cdn.plot.ly data: blob:; media-src https://cdn.jsdelivr.net https://unpkg.com https://cdnjs.cloudflare.com https://fonts.googleapis.com https://fonts.gstatic.com https://cdn.plot.ly data: blob:; connect-src 'none'"
+    />
+  </head>
+  <body>
+    <script>
+      // ?path=<artifacts/html/…> — the View may append its own `?v=…`.
+      const path = (
+        new URLSearchParams(location.search).get("path") || ""
+      ).split("?")[0];
+      window.addEventListener("message", (event) => {
+        const data = event.data;
+        if (
+          event.source !== window.parent ||
+          !data ||
+          data.type !== "mulmoglass:html" ||
+          data.path !== path ||
+          typeof data.html !== "string"
+        ) {
+          return;
+        }
+        // Replaces this document (and removes this listener).
+        document.open();
+        document.write(data.html);
+        document.close();
+      });
+      window.parent.postMessage({ type: "mulmoglass:html-request", path }, "*");
+    </script>
+  </body>
+</html>
