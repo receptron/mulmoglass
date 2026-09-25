@@ -17,11 +17,7 @@ import HtmlPlugin from "@mulmoclaude/html-plugin/vue";
 import ShapeScriptPlugin from "@mulmoclaude/shapescript-plugin/vue";
 import FormPlugin from "@mulmoclaude/form-plugin/vue";
 import SpreadsheetPlugin from "@gui-chat-plugin/spreadsheet/vue";
-import TodoPlugin from "@gui-chat-plugin/todo/vue";
 import MindMapPlugin from "@gui-chat-plugin/mindmap/vue";
-import OthelloPlugin from "@gui-chat-plugin/othello/vue";
-import TicTacToePlugin from "@gui-chat-plugin/tictactoe/vue";
-import GoPlugin from "@gui-chat-plugin/go/vue";
 import WeatherPlugin from "@gui-chat-plugin/weather/vue";
 
 import type { ToolPlugin } from "./types";
@@ -78,11 +74,7 @@ const registeredPlugins: { plugin: ToolPlugin }[] = [
   QuizPlugin,
   FormPlugin,
   SpreadsheetPlugin,
-  TodoPlugin,
   MindMapPlugin,
-  OthelloPlugin,
-  TicTacToePlugin,
-  GoPlugin,
   // Forecasts from the Japan Meteorological Agency (Japan only), fetched from
   // the browser (its API allows any origin).
   WeatherPlugin,
