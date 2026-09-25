@@ -1,5 +1,3 @@
-/* global OfflineAudioContext */
-
 /**
  * Audio codec utilities for Google Live API
  * Handles conversion between Float32Array (Web Audio API) and 16-bit PCM (Google format)
@@ -59,48 +57,6 @@ export function decodePCM16ToFloat32(base64PCM: string): Float32Array {
   }
 
   return float32;
-}
-
-/**
- * Resample audio from one sample rate to another using high-quality browser resampling
- * @param audioData - Input audio data
- * @param sourceSampleRate - Source sample rate in Hz
- * @param targetSampleRate - Target sample rate in Hz
- * @returns Resampled audio data (Promise for async processing)
- */
-export async function resampleAudio(
-  audioData: Float32Array,
-  sourceSampleRate: number,
-  targetSampleRate: number,
-): Promise<Float32Array> {
-  if (sourceSampleRate === targetSampleRate) {
-    return audioData;
-  }
-
-  // Use OfflineAudioContext for high-quality browser-based resampling
-  const offlineContext = new OfflineAudioContext(
-    1, // mono
-    Math.ceil((audioData.length * targetSampleRate) / sourceSampleRate),
-    targetSampleRate,
-  );
-
-  // Create a buffer with source data
-  const sourceBuffer = offlineContext.createBuffer(
-    1,
-    audioData.length,
-    sourceSampleRate,
-  );
-  sourceBuffer.copyToChannel(audioData as Float32Array<ArrayBuffer>, 0);
-
-  // Create source node and connect to destination
-  const source = offlineContext.createBufferSource();
-  source.buffer = sourceBuffer;
-  source.connect(offlineContext.destination);
-  source.start(0);
-
-  // Render the resampled audio
-  const renderedBuffer = await offlineContext.startRendering();
-  return renderedBuffer.getChannelData(0);
 }
 
 /**
