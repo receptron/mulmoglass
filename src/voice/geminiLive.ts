@@ -15,7 +15,6 @@ import {
   convertToGoogleToolFormat,
   type OpenAITool,
 } from "../audio/toolConverter";
-import { getVoiceProvider } from "../config/models";
 
 // Types for Google Live API
 interface GoogleLiveState {
@@ -72,7 +71,6 @@ interface GoogleWebSocketMessage {
 
 interface GoogleGenerationConfig {
   responseModalities: string[];
-  thinkingConfig?: { thinkingLevel: string };
 }
 
 interface GoogleSystemInstruction {
@@ -341,14 +339,6 @@ export function useGeminiLive(options: VoiceSessionOptions): VoiceSession {
     const generationConfig: GoogleGenerationConfig = {
       responseModalities: ["AUDIO"],
     };
-
-    // Thinking models reject the setup unless a thinking level is given
-    const thinkingLevel = getVoiceProvider("google").models.find(
-      (m) => m.id === modelId.replace(/^models\//, ""),
-    )?.thinkingLevel;
-    if (thinkingLevel) {
-      generationConfig.thinkingConfig = { thinkingLevel };
-    }
 
     // Build setup config
     const setupConfig: GoogleSetupConfig = {

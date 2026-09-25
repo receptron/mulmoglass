@@ -3,22 +3,18 @@
 import { reactive, watch } from "vue";
 import {
   DEFAULT_VOICE_PROVIDER,
-  getVoiceProvider,
+  VOICE_KEY,
+  type ApiKeyName,
   type ImageBackend,
   type VoiceProvider,
 } from "../config/models";
 import { DEFAULT_LANGUAGE_CODE } from "../config/languages";
 
-export interface ApiKeys {
-  openai: string;
-  gemini: string;
-  xai: string;
-}
+export type ApiKeys = Record<ApiKeyName, string>;
 
 export interface Settings {
   keys: ApiKeys;
   voiceProvider: VoiceProvider;
-  voiceModel: Record<VoiceProvider, string>;
   language: string;
   imageBackend: ImageBackend;
 }
@@ -28,11 +24,6 @@ const STORAGE_KEY = "mulmoglass_settings_v1";
 const defaults = (): Settings => ({
   keys: { openai: "", gemini: "", xai: "" },
   voiceProvider: DEFAULT_VOICE_PROVIDER,
-  voiceModel: {
-    openai: getVoiceProvider("openai").models[0].id,
-    google: getVoiceProvider("google").models[0].id,
-    grok: getVoiceProvider("grok").models[0].id,
-  },
   language: DEFAULT_LANGUAGE_CODE,
   imageBackend: "gemini",
 });
@@ -62,17 +53,12 @@ function load(): Settings {
   ) {
     settings.voiceProvider = stored.voiceProvider;
   }
-  if (isRecord(stored.voiceModel)) {
-    for (const provider of ["openai", "google", "grok"] as const) {
-      const model = stored.voiceModel[provider];
-      // A model no longer offered falls back to the provider's first.
-      if (getVoiceProvider(provider).models.some((m) => m.id === model)) {
-        settings.voiceModel[provider] = model as string;
-      }
-    }
-  }
   if (typeof stored.language === "string") settings.language = stored.language;
-  if (stored.imageBackend === "gemini" || stored.imageBackend === "openai") {
+  if (
+    stored.imageBackend === "gemini" ||
+    stored.imageBackend === "openai" ||
+    stored.imageBackend === "xai"
+  ) {
     settings.imageBackend = stored.imageBackend;
   }
   return settings;
@@ -85,6 +71,16 @@ watch(
   (value) => localStorage.setItem(STORAGE_KEY, JSON.stringify(value)),
   { deep: true },
 );
+
+/** The key the selected voice needs, if it isn't set yet. */
+export const missingVoiceKey = (s: Settings): ApiKeyName | null => {
+  const name = VOICE_KEY[s.voiceProvider];
+  return s.keys[name] ? null : name;
+};
+
+/** No key at all: a first launch. */
+export const hasNoKeys = (s: Settings): boolean =>
+  !Object.values(s.keys).some((key) => key);
 
 export function useSettings(): Settings {
   return settings;
