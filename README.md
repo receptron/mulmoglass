@@ -25,6 +25,41 @@ yarn lint
 
 The microphone needs a secure context: `localhost` works, and so does HTTPS. To try it in a headset, serve it over HTTPS (or open it on `localhost` on the device).
 
+## Deploy
+
+MulmoGlass is served as static files from Firebase Hosting (project `mulmoglass`):
+**https://mulmoglass.web.app**. Hosting serves the built files and nothing else: keys, conversations
+and plugin files stay on the device, and every API call goes straight from the device to its
+provider.
+
+```sh
+yarn deploy     # vite build && firebase deploy --only hosting
+```
+
+`firebase.json` sets the headers: `frame-ancestors 'self'` (presentHtml's page shell is framed by the
+app itself, so the usual `deny` would break it), `no-cache` for `index.html`, the manifest and
+`sw.js`, and long caching for Vite's hashed `assets/`. Its `ignore` deliberately omits Firebase's
+default `**/.*`, which would silently drop `.well-known/assetlinks.json` (see below).
+
+The site's origin is also where each user's keys (`localStorage`) and files (OPFS) live, so moving
+MulmoGlass to another domain starts every user over.
+
+## Packaging for the Horizon Store
+
+Meta packages web apps as a Trusted Web Activity with its fork of Bubblewrap
+([guide](https://developers.meta.com/horizon/documentation/web/pwa-packaging/)): the APK opens the
+hosted site, and `/.well-known/assetlinks.json` proves the site and the APK belong together.
+
+```sh
+npm install --global @meta-quest/bubblewrap-cli
+bubblewrap init --manifest=https://mulmoglass.web.app/manifest.webmanifest --metaquest
+#   app mode: 2D; display: standalone; no Horizon Billing; keep the signing key safe
+bubblewrap fingerprint add <sha256 from `keytool -list -v -keystore …`>
+# put the generated assetlinks.json in public/.well-known/, then `yarn deploy`
+bubblewrap build          # → app-release-signed.apk
+adb install app-release-signed.apk   # Quest in developer mode; launch from Unknown Sources
+```
+
 ## License
 
 AGPL-3.0-only, like MulmoChat. Parts are adapted from MulmoTerminal (MIT License, Copyright (c) 2026 Receptron); those files say so.
