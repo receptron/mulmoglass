@@ -112,15 +112,6 @@ export function publishFileChange(filePath: string): void {
   publish(`file:${filePath}`, { mtimeMs: Date.now() });
 }
 
-/** Send an event to one tool's open Views (MulmoChat's plugin events). */
-export function publishPluginEvent(
-  toolName: string,
-  eventName: string,
-  data: unknown,
-): void {
-  publish(pluginChannel(toolName, eventName), data);
-}
-
 function makeSubscribe(toolName: string): PluginSubscribe {
   function subscribe(
     eventName: string,
