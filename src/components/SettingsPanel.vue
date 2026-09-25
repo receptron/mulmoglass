@@ -18,39 +18,95 @@
         </button>
       </header>
 
-      <p v-if="locked" class="rounded-lg bg-slate-800 px-4 py-3 text-slate-300">
-        Disconnect to change the voice provider or model.
+      <p
+        v-if="noKeys"
+        class="rounded-lg bg-sky-950 border border-sky-800 px-4 py-3 text-slate-200"
+        data-testid="settings-intro"
+      >
+        MulmoGlass uses your own API keys. Choose a voice and an image service,
+        then paste the keys they need below (marked in amber). You can add the
+        others later.
       </p>
 
-      <label class="flex flex-col gap-2">
-        <span class="text-slate-300">Voice</span>
-        <select
-          v-model="settings.voiceProvider"
-          :disabled="locked"
-          class="field"
-        >
-          <option v-for="p in VOICE_PROVIDERS" :key="p.id" :value="p.id">
-            {{ p.label }}
-          </option>
-        </select>
-      </label>
+      <p v-if="locked" class="rounded-lg bg-slate-800 px-4 py-3 text-slate-300">
+        Disconnect to change the voice.
+      </p>
 
-      <label class="flex flex-col gap-2">
-        <span class="text-slate-300">Model</span>
-        <select
-          v-model="settings.voiceModel[settings.voiceProvider]"
-          :disabled="locked"
-          class="field"
-        >
-          <option
-            v-for="m in getVoiceProvider(settings.voiceProvider).models"
-            :key="m.id"
-            :value="m.id"
+      <!-- The two choices that decide which keys are needed, side by side. -->
+      <div class="grid grid-cols-2 gap-4">
+        <label class="flex flex-col gap-2">
+          <span class="text-slate-300">Voice</span>
+          <select
+            v-model="settings.voiceProvider"
+            :disabled="locked"
+            class="field"
           >
-            {{ m.label }}
-          </option>
-        </select>
-      </label>
+            <option v-for="(m, id) in VOICE_MODELS" :key="id" :value="id">
+              {{ m.label }}
+            </option>
+          </select>
+        </label>
+        <label class="flex flex-col gap-2">
+          <span class="text-slate-300">Images</span>
+          <select v-model="settings.imageBackend" class="field">
+            <option v-for="(m, id) in IMAGE_MODELS" :key="id" :value="id">
+              {{ m.label }}
+            </option>
+          </select>
+        </label>
+      </div>
+
+      <!-- Keys come right after those choices: they are what stops a first
+           launch. The one the selected voice needs is marked and focused. -->
+      <fieldset class="flex flex-col gap-4">
+        <legend class="text-slate-300 mb-2">
+          API keys — stored on this device only, and sent only to their
+          provider.
+        </legend>
+        <div
+          v-for="(info, name) in API_KEYS"
+          :key="name"
+          class="flex flex-col gap-2 rounded-xl p-3"
+          :class="
+            needed(name) && !settings.keys[name] ? 'ring-2 ring-amber-400' : ''
+          "
+        >
+          <div class="flex items-center justify-between gap-3">
+            <label :for="`key-${name}`" class="flex items-center gap-2">
+              {{ info.label }}
+              <span
+                v-if="needed(name)"
+                class="text-sm rounded-full px-2 py-0.5"
+                :class="
+                  settings.keys[name]
+                    ? 'bg-slate-700 text-slate-300'
+                    : 'bg-amber-400 text-slate-900'
+                "
+                :data-testid="`key-needed-${name}`"
+                >{{ neededFor(name) }}</span
+              >
+            </label>
+            <a
+              :href="info.consoleUrl"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="text-sky-400 hover:text-sky-300 flex items-center gap-1"
+            >
+              Get a key
+              <span class="material-icons text-base">open_in_new</span>
+            </a>
+          </div>
+          <input
+            :id="`key-${name}`"
+            :ref="(el) => setInputRef(name, el)"
+            v-model.trim="settings.keys[name]"
+            type="password"
+            autocomplete="off"
+            :placeholder="info.placeholder"
+            class="field"
+          />
+        </div>
+      </fieldset>
 
       <label class="flex flex-col gap-2">
         <span class="text-slate-300">Language</span>
@@ -61,62 +117,60 @@
         </select>
       </label>
 
-      <label class="flex flex-col gap-2">
-        <span class="text-slate-300">Images</span>
-        <select v-model="settings.imageBackend" class="field">
-          <option value="gemini">Gemini (Gemini key)</option>
-          <option value="openai">OpenAI (OpenAI key)</option>
-        </select>
-      </label>
-
-      <fieldset class="flex flex-col gap-4">
-        <legend class="text-slate-300 mb-2">
-          API keys — stored on this device only, and sent only to their
-          provider.
-        </legend>
-        <label class="flex flex-col gap-2">
-          <span>OpenAI</span>
-          <input
-            v-model.trim="settings.keys.openai"
-            type="password"
-            autocomplete="off"
-            placeholder="sk-…"
-            class="field"
-          />
-        </label>
-        <label class="flex flex-col gap-2">
-          <span>Gemini</span>
-          <input
-            v-model.trim="settings.keys.gemini"
-            type="password"
-            autocomplete="off"
-            class="field"
-          />
-        </label>
-        <label class="flex flex-col gap-2">
-          <span>xAI (Grok)</span>
-          <input
-            v-model.trim="settings.keys.xai"
-            type="password"
-            autocomplete="off"
-            placeholder="xai-…"
-            class="field"
-          />
-        </label>
-      </fieldset>
+      <button
+        class="self-end h-14 px-8 rounded-full bg-sky-600 hover:bg-sky-500 text-xl"
+        @click="$emit('close')"
+      >
+        Done
+      </button>
     </section>
   </div>
 </template>
 
 <script setup lang="ts">
-import { useSettings } from "../composables/useSettings";
+import { nextTick, onMounted } from "vue";
+import { hasNoKeys, useSettings } from "../composables/useSettings";
 import { LANGUAGES } from "../config/languages";
-import { VOICE_PROVIDERS, getVoiceProvider } from "../config/models";
+import {
+  API_KEYS,
+  IMAGE_KEY,
+  IMAGE_MODELS,
+  VOICE_KEY,
+  VOICE_MODELS,
+  type ApiKeyName,
+} from "../config/models";
 
-defineProps<{ locked: boolean }>();
+const props = defineProps<{
+  locked: boolean;
+  /** A key to focus on open (the one a connect attempt was missing). */
+  focusKey?: ApiKeyName | null;
+}>();
 defineEmits<{ close: [] }>();
 
 const settings = useSettings();
+// Only while nothing is set: once a key is typed the note has done its job.
+// Read at open, so it doesn't vanish mid-sentence on the first keystroke.
+const noKeys = hasNoKeys(settings);
+
+const neededFor = (name: ApiKeyName): string => {
+  const uses: string[] = [];
+  if (VOICE_KEY[settings.voiceProvider] === name) uses.push("voice");
+  if (IMAGE_KEY[settings.imageBackend] === name) uses.push("images");
+  return uses.length ? `Needed for ${uses.join(" and ")}` : "";
+};
+const needed = (name: ApiKeyName): boolean => neededFor(name) !== "";
+
+const inputs: Partial<Record<ApiKeyName, HTMLInputElement>> = {};
+const setInputRef = (name: ApiKeyName, el: unknown) => {
+  if (el instanceof HTMLInputElement) inputs[name] = el;
+};
+
+onMounted(async () => {
+  if (!props.focusKey) return;
+  await nextTick();
+  inputs[props.focusKey]?.focus();
+  inputs[props.focusKey]?.scrollIntoView({ block: "nearest" });
+});
 </script>
 
 <style scoped>

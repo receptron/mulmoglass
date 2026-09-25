@@ -36,7 +36,7 @@ function or any hosted service of ours, even a small one.
   key goes only to its own provider.
 - **The app talks to the providers directly.** That only works because their endpoints allow
   browser calls: OpenAI's and xAI's `/v1/realtime/client_secrets`, Gemini Live's WebSocket, Gemini's
-  `generateContent` and OpenAI's `/v1/images/generations` (each checked with a CORS preflight; the
+  `generateContent`, and OpenAI's and xAI's `/v1/images/generations` (each checked with a CORS preflight; the
   OpenAI image path has not run end to end yet). Before adding a provider call, check its
   CORS with a preflight (`curl -X OPTIONS -H "Origin: https://example.com" …`); a provider that
   blocks browsers can't be used here, and a proxy is not the fix.

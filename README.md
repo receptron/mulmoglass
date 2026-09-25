@@ -10,7 +10,7 @@ MulmoGlass is a set of static files (a PWA). Nothing of ours runs anywhere:
 
 - **Your own keys.** You enter an OpenAI, Gemini and/or xAI key in Settings. They are stored on the device only (localStorage) and sent only to their provider.
 - **Voice straight to the provider.** OpenAI Realtime (WebRTC), Gemini Live (WebSocket) and Grok Voice (WebSocket). The app mints the OpenAI and xAI voice tokens itself; both token endpoints allow browser calls.
-- **Plugins run in the page.** The plugins that MulmoChat runs on its server (presentDocument, presentChart, presentHtml, presentShapeScript, generateImage) run here, with the same package code. Their files live in the browser's Origin Private File System, and images come straight from Gemini's or OpenAI's API.
+- **Plugins run in the page.** The plugins that MulmoChat runs on its server (presentDocument, presentChart, presentHtml, presentShapeScript, generateImage) run here, with the same package code. Their files live in the browser's Origin Private File System, and images come straight from Gemini's, OpenAI's or xAI's (Grok Imagine) API. With Grok for both voice and images, one xAI key runs the whole app.
 
 Not included, because they need a server or a headless browser: web browsing, search, PDF export, renderShapeScript and MulmoScript movies.
 

@@ -58,6 +58,7 @@ let imageSettings: () => ImageSettings = () => ({
   backend: "gemini",
   geminiKey: "",
   openaiKey: "",
+  xaiKey: "",
 });
 
 /** Where the host reads the user's image backend and keys. */
