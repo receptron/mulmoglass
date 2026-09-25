@@ -22,6 +22,7 @@
     "@gui-chat-plugin/spreadsheet": "^2.0.0",
     "@gui-chat-plugin/tictactoe": "^2.0.0",
     "@gui-chat-plugin/todo": "^2.0.0",
+    "@gui-chat-plugin/weather": "^2.0.0",
     "@mulmochat-plugin/generate-image": "^2.0.0",
     "@mulmochat-plugin/quiz": "^2.0.0",
     "@mulmochat-plugin/ui-image": "^0.4.1",

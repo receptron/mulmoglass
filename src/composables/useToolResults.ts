@@ -15,6 +15,25 @@ interface UseToolResultsOptions {
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+// Every tool call is logged (console, "[tool]") so a session can be debugged
+// from the browser's devtools, remotely on a headset too: what the model
+// called, with which arguments, and what went back to it.
+// The line carries a JSON summary (readable wherever the console is captured
+// as text); the object after it expands in devtools.
+const LOG_SUMMARY_MAX = 500;
+const logTool = (event: string, name: string, detail: unknown) => {
+  let summary: string;
+  try {
+    summary = JSON.stringify(detail) ?? "";
+  } catch {
+    summary = String(detail);
+  }
+  if (summary.length > LOG_SUMMARY_MAX) {
+    summary = `${summary.slice(0, LOG_SUMMARY_MAX)}…`;
+  }
+  console.info(`[tool] ${event} ${name} ${summary}`, detail);
+};
+
 export function useToolResults(options: UseToolResultsOptions) {
   const results = ref<ToolResult[]>([]);
   const selectedIndex = ref(-1);
@@ -44,13 +63,22 @@ export function useToolResults(options: UseToolResultsOptions) {
   const handleToolCall = async (msg: ToolCallMessage, argStr: string) => {
     const plugin = getToolPlugin(msg.name);
     runningMessage.value = plugin?.generatingMessage || "Working...";
+    const started = performance.now();
     try {
       const args = argStr ? JSON.parse(argStr) : {};
+      logTool("call", msg.name, args);
       if (plugin?.waitingMessage && options.isConnected()) {
         options.sendInstructions(plugin.waitingMessage);
       }
       const previous = selectedResult.value;
       const result = await toolExecute(msg.name, args, previous);
+      logTool("result", msg.name, {
+        ms: Math.round(performance.now() - started),
+        message: result.message,
+        instructions: result.instructions,
+        jsonData: result.jsonData,
+        cancelled: result.cancelled,
+      });
       if (!result.cancelled) addOrUpdate(result, previous);
       sendOutput(msg.call_id, {
         status: result.message,
@@ -64,7 +92,7 @@ export function useToolResults(options: UseToolResultsOptions) {
       }
     } catch (error) {
       const message = `Tool execution failed: ${error}`;
-      console.error(message);
+      console.error(`[tool] failed ${msg.name}`, error, { args: argStr });
       sendOutput(msg.call_id, message);
       options.sendInstructions(
         `The previous tool call for "${msg.name}" failed with error: ${error}. Please analyze the error and try an appropriate solution.`,

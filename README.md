@@ -1,6 +1,6 @@
 # MulmoGlass
 
-A voice assistant for VR glasses (Meta's Horizon OS: the Quest browser now, Meta VR Glasses when they ship) that shows its answers: images, documents, charts, HTML pages, 3D models, quizzes, forms, spreadsheets, mind maps and board games.
+A voice assistant for VR glasses (Meta's Horizon OS: the Quest browser now, Meta VR Glasses when they ship) that shows its answers: images, documents, charts, HTML pages, 3D models, quizzes, forms, spreadsheets, mind maps, board games and weather forecasts (Japan).
 
 It is a voice-only offshoot of [MulmoChat](https://github.com/receptron/MulmoChat), built on the same [gui-chat-protocol](https://github.com/receptron/gui-chat-protocol) plugins.
 
