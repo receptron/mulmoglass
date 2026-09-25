@@ -3,3 +3,16 @@ dist/
 *.log
 .DS_Store
 .firebase/
+
+# Android (Bubblewrap) build outputs. The signing key lives outside the repo
+# (~/.config/mulmoglass/signing/), never in it.
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/*.apk
+android/*.aab
+android/*.idsig
+*.keystore
+*.jks
+credentials.env

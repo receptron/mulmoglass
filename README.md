@@ -47,18 +47,31 @@ MulmoGlass to another domain starts every user over.
 ## Packaging for the Horizon Store
 
 Meta packages web apps as a Trusted Web Activity with its fork of Bubblewrap
-([guide](https://developers.meta.com/horizon/documentation/web/pwa-packaging/)): the APK opens the
-hosted site, and `/.well-known/assetlinks.json` proves the site and the APK belong together.
+([guide](https://developers.meta.com/horizon/documentation/web/pwa-packaging/)): the APK opens
+https://mulmoglass.web.app full-window, and `public/.well-known/assetlinks.json` proves the site and
+the APK belong together. Updating the site updates every installed copy; a new APK is only needed
+when `android/twa-manifest.json` changes.
+
+- **`android/`** is the Bubblewrap project (package `com.receptron.mulmoglass`, Horizon OS 2D app,
+  **microphone permission on**: Bubblewrap's `init` prompt defaults it to off, which would ship a
+  voice app that can't hear).
+- **The signing key is not in the repo.** It lives in `~/.config/mulmoglass/signing/`
+  (`mulmoglass-upload.keystore` and `credentials.env` with its alias and passwords). Every update
+  must be signed with the same key, so back both up somewhere safe. `twa-manifest.json` records the
+  keystore's path on the machine that built it; change it when building elsewhere.
+- **Toolchain**: `npm install -g @meta-quest/bubblewrap-cli`, JDK 17 and the Android SDK
+  (build-tools 34, platform 32) set in `~/.bubblewrap/config.json`; `bubblewrap doctor` must pass.
 
 ```sh
-npm install --global @meta-quest/bubblewrap-cli
-bubblewrap init --manifest=https://mulmoglass.web.app/manifest.webmanifest --metaquest
-#   app mode: 2D; display: standalone; no Horizon Billing; keep the signing key safe
-bubblewrap fingerprint add <sha256 from `keytool -list -v -keystore …`>
-# put the generated assetlinks.json in public/.well-known/, then `yarn deploy`
-bubblewrap build          # → app-release-signed.apk
-adb install app-release-signed.apk   # Quest in developer mode; launch from Unknown Sources
+cd android
+set -a; . ~/.config/mulmoglass/signing/credentials.env; set +a
+bubblewrap build --skipPwaValidation   # → app-release-signed.apk, app-release-bundle.aab
+adb install -r app-release-signed.apk  # Quest in developer mode; launch from Unknown Sources
 ```
+
+When the key changes (it shouldn't), update the fingerprint in `twa-manifest.json`
+(`bubblewrap fingerprint add`) and `public/.well-known/assetlinks.json`
+(`bubblewrap fingerprint generateAssetLinks`), then `yarn deploy`.
 
 ## License
 

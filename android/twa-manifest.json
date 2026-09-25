@@ -1,0 +1,60 @@
+{
+  "packageId": "com.receptron.mulmoglass",
+  "applicationId": "0",
+  "host": "mulmoglass.web.app",
+  "name": "MulmoGlass",
+  "launcherName": "MulmoGlass",
+  "display": "standalone",
+  "themeColor": "#0F172A",
+  "themeColorDark": "#000000",
+  "navigationColor": "#000000",
+  "navigationColorDark": "#000000",
+  "navigationDividerColor": "#000000",
+  "navigationDividerColorDark": "#000000",
+  "backgroundColor": "#020617",
+  "enableNotifications": true,
+  "enableMicrophone": true,
+  "enableXRScene": false,
+  "startUrl": "/",
+  "iconUrl": "https://mulmoglass.web.app/icon-512.png",
+  "maskableIconUrl": "https://mulmoglass.web.app/icon-512.png",
+  "splashScreenFadeOutDuration": 300,
+  "signingKey": {
+    "path": "/Users/satoshi/.config/mulmoglass/signing/mulmoglass-upload.keystore",
+    "alias": "mulmoglass"
+  },
+  "appVersionName": "1",
+  "appVersionCode": 1,
+  "shortcuts": [],
+  "generatorApp": "bubblewrap-cli",
+  "webManifestUrl": "https://mulmoglass.web.app/manifest.webmanifest",
+  "fallbackType": "customtabs",
+  "features": {
+    "horizonPlatformSDK": {
+      "enabled": true
+    }
+  },
+  "alphaDependencies": {
+    "enabled": false
+  },
+  "enableSiteSettingsShortcut": true,
+  "isChromeOSOnly": false,
+  "isMetaQuest": true,
+  "horizonOSAppMode": "2D",
+  "fullScopeUrl": "https://mulmoglass.web.app/",
+  "minSdkVersion": 23,
+  "orientation": "default",
+  "fingerprints": [
+    {
+      "name": "upload-key",
+      "value": "EB:FC:D8:4A:9A:C0:DE:7E:12:96:3D:F3:19:67:67:6E:B0:67:FC:04:67:F1:35:28:7B:C9:C5:4A:03:2B:D7:B0"
+    }
+  ],
+  "additionalTrustedOrigins": [],
+  "retainedBundles": [],
+  "protocolHandlers": [],
+  "fileHandlers": [],
+  "launchHandlerClientMode": "",
+  "displayOverride": [],
+  "appVersion": "1"
+}

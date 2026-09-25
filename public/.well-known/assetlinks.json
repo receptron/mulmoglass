@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "com.receptron.mulmoglass",
+        "sha256_cert_fingerprints": ["EB:FC:D8:4A:9A:C0:DE:7E:12:96:3D:F3:19:67:67:6E:B0:67:FC:04:67:F1:35:28:7B:C9:C5:4A:03:2B:D7:B0"]
+      }
+    }]
