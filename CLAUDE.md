@@ -139,3 +139,18 @@ Add a gui-chat-protocol package to `package.json` and `registeredPlugins` in `sr
 then test it by voice (above). A plugin whose `execute()` needs host backends gets them in
 `src/host/pluginHost.ts` (`createAppContext`, `DISPATCH_HANDLERS`). Code copied from MulmoChat or
 MulmoTerminal keeps its attribution comment.
+
+**Read a plugin's `systemPrompt` before registering it.** It goes into the voice model's
+instructions verbatim, and a prompt written for a text chat can misfire here. generateImage's says
+the model MUST draw whenever it talks about places, objects or people; together with a base prompt
+that said "present things visually", asking for Tokyo's weather produced an illustration of Tokyo
+instead of a forecast. MulmoGlass overrides it (`GENERATE_IMAGE_PROMPT`), and the base prompt now
+says to use a tool only when it answers the request and never to make up facts it doesn't have.
+When a question needs live data (weather, news, prices), give the model a tool that has it (the
+weather plugin, JMA, Japan only) rather than expecting it to decline.
+
+## Debugging
+
+Every tool call is logged to the console: `[tool] call <name> <args>`, `[tool] result <name>
+<ms, message, instructions, jsonData>`, `[tool] failed …`, and `[view] message …` for what a View
+sends the model. On a Quest, read them with remote devtools (`chrome://inspect` over `adb`).

@@ -307,6 +307,11 @@
   resolved "https://registry.yarnpkg.com/@gui-chat-plugin/todo/-/todo-2.0.0.tgz#fb0d644259407c1612758f837087f7efdf57a507"
   integrity sha512-IjIjvugIE0CjYD9FLx9V8dPwEf0q0rjtL1+0uCO4TUx+PZICZ16UuOLYj4fRMZp7jHRuiJgz5A2caHPZNqmaqg==
 
+"@gui-chat-plugin/weather@^2.0.0":
+  version "2.0.0"
+  resolved "https://registry.yarnpkg.com/@gui-chat-plugin/weather/-/weather-2.0.0.tgz#07da3ce666f37d8b7f3ddd8a882cc4e8c79d2342"
+  integrity sha512-eXgPnnM52vZ9U9wGq2LIZKQS+JjknTMKXEzII6crKYc6uuREuhw4+bpKrcTc2Tv2MXShT2kNqoeyQOxBBSSHxw==
+
 "@humanfs/core@^0.19.2":
   version "0.19.2"
   resolved "https://registry.yarnpkg.com/@humanfs/core/-/core-0.19.2.tgz#a8272ca03b2acf492670222b2320b6c421bfde60"

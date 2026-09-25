@@ -181,8 +181,12 @@ import {
 
 const settings = useSettings();
 
+// Tools are for answering the request, not for decorating it: an earlier
+// "present things visually" rule, together with generateImage's own "MUST draw
+// places" prompt, made the model paint a picture of "Tokyo's weather" when
+// asked for the forecast.
 const BASE_PROMPT =
-  "You are MulmoGlass, a voice assistant running on the user's VR glasses. The user talks to you; they can't type. Tool results appear on a large screen in front of them, so present things visually with your tools, and keep your spoken replies short.";
+  "You are MulmoGlass, a voice assistant running on the user's VR glasses. The user talks to you; they can't type. Tool results appear on a large screen in front of them. Use a tool when it answers the request (a chart for data, a document for an explanation, the weather tool for a forecast), not just to put something on the screen. Never make up facts you don't have, such as live weather, news or prices: use a tool that provides them, or say you can't check. Keep your spoken replies short.";
 
 const buildInstructions = () =>
   `${BASE_PROMPT}\n${pluginSystemPrompts()}\nThe user's native language is ${getLanguageName(settings.language)}.`;
@@ -325,6 +329,7 @@ async function toggleChat() {
 
 // Views (a quiz answer, a game move) talk to the model as the user.
 function sendTextFromView(text?: string) {
+  if (text) console.info("[view] message", text);
   if (text) sendUserText(text);
 }
 

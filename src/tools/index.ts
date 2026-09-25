@@ -22,6 +22,7 @@ import MindMapPlugin from "@gui-chat-plugin/mindmap/vue";
 import OthelloPlugin from "@gui-chat-plugin/othello/vue";
 import TicTacToePlugin from "@gui-chat-plugin/tictactoe/vue";
 import GoPlugin from "@gui-chat-plugin/go/vue";
+import WeatherPlugin from "@gui-chat-plugin/weather/vue";
 
 import type { ToolPlugin } from "./types";
 import {
@@ -54,8 +55,20 @@ Format embedded images as: ![Detailed image prompt](__too_be_replaced_image_path
 // (public/sw.js).
 const PRESENT_HTML_PROMPT = `Use presentHtml when the user asks for HTML output, dashboards, custom layouts, or interactive content. Provide EITHER \`html\` OR \`path\`, not both. \`html\` is a full self-contained document (\`<!DOCTYPE html>\`, \`<html>\`, \`<body>\`) with all CSS and JavaScript inlined or loaded from a CDN (cdn.jsdelivr.net, unpkg.com, cdnjs.cloudflare.com, cdn.plot.ly, Google Fonts); the page cannot make network requests (fetch/XHR). Images and media may come from those same CDNs, \`data:\` URLs or \`blob:\` URLs (inline SVG and canvas work too); any other host is blocked. It is saved to \`artifacts/html/<YYYY>/<MM>/...\`. \`path\` presents a page you saved earlier (\`artifacts/html/...\`) without re-saving it.`;
 
+// generateImage's own prompt says the model MUST draw whenever it talks about
+// places, objects or people. On a voice-only device that turns every mention
+// of a city into a picture, including answers it has no data for (a "weather
+// in Tokyo" illustration), so MulmoGlass replaces it.
+const GENERATE_IMAGE_PROMPT =
+  "Use generateImage when the user asks for a picture, or when an illustration clearly helps explain what you are talking about. Never use an image in place of information you don't have: an image can't show today's weather, the news or a price.";
+
 const registeredPlugins: { plugin: ToolPlugin }[] = [
-  GenerateImagePlugin,
+  {
+    plugin: {
+      ...GenerateImagePlugin.plugin,
+      systemPrompt: GENERATE_IMAGE_PROMPT,
+    },
+  },
   {
     plugin: { ...MarkdownPlugin.plugin, systemPrompt: PRESENT_DOCUMENT_PROMPT },
   },
@@ -70,6 +83,9 @@ const registeredPlugins: { plugin: ToolPlugin }[] = [
   OthelloPlugin,
   TicTacToePlugin,
   GoPlugin,
+  // Forecasts from the Japan Meteorological Agency (Japan only), fetched from
+  // the browser (its API allows any origin).
+  WeatherPlugin,
 ] as { plugin: ToolPlugin }[];
 
 // presentHtml's View loads `data.previewUrl` when there is one; point it at
