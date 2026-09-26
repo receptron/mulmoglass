@@ -11,6 +11,12 @@ interface UseToolResultsOptions {
   sendFunctionCallOutput: (callId: string, output: string) => boolean;
   sendInstructions: (instructions: string) => boolean;
   isConnected: () => boolean;
+  /** Every result, before its instructions go to the model. */
+  onResult?: (
+    name: string,
+    args: Record<string, unknown>,
+    result: ToolResult,
+  ) => void;
 }
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -80,6 +86,7 @@ export function useToolResults(options: UseToolResultsOptions) {
         cancelled: result.cancelled,
       });
       if (!result.cancelled) addOrUpdate(result, previous);
+      options.onResult?.(msg.name, args, result);
       sendOutput(msg.call_id, {
         status: result.message,
         data: result.jsonData,

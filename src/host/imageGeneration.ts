@@ -30,7 +30,15 @@ async function geminiImage(prompt: string, key: string): Promise<string> {
     {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-goog-api-key": key },
-      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
+      // Without responseModalities the model may answer a prompt that reads
+      // like a question ("ATP's structure: …") with text alone: one call in
+      // three in testing, which ended a slideshow. IMAGE alone always gave an
+      // image. (MulmoClaude also asks for 16:9; here that image is taller than
+      // the canvas in ui-image's View, which fits it to the width.)
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { responseModalities: ["IMAGE"] },
+      }),
     },
   );
   if (!response.ok) {

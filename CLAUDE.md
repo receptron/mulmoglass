@@ -149,10 +149,18 @@ says to use a tool only when it answers the request and never to make up facts i
 When a question needs live data (weather, news, prices), give the model a tool that has it (the
 weather plugin, JMA, Japan only) rather than expecting it to decline.
 
-A tool result's `instructions` decide whether the model keeps going. generateImage's said only
-"acknowledge that the image was generated", which ended a slideshow after its first slide, so a
-generated image now gets `IMAGE_SHOWN_INSTRUCTIONS` (`src/tools/index.ts`): explain the slide, then
-call generateImage for the next one in the same reply. Grok still stops early now and then.
+A tool result's `instructions` decide whether the model keeps going, and even good ones are not
+always followed. Slideshows are `presentSlide` calls (`src/tools/presentSlide.ts`, one generated
+picture per slide, with the slide number and total as arguments), each telling the model to explain
+the slide and call the next one in the same reply. The model still ended replies mid-slideshow
+(about one run in three with generateImage and "Slide N of M" prompts), so `useSlideshow` asks it
+once per slide to go on when a reply ends, nothing plays or runs, and slides are left; the user
+speaking stops that. Gemini Live sometimes called the next slide twice (once in the reply it starts
+after a tool output, once in the one the instructions start); a repeat within a minute is dropped.
+
+Gemini's image model answers some prompts with text and no image (one call in three for a prompt
+that reads like a question, such as a slide about ATP's structure) unless the request sets
+`responseModalities: ["IMAGE"]` (`src/host/imageGeneration.ts`).
 
 ## Debugging
 
