@@ -6,20 +6,20 @@
 // and the model sometimes ended a reply without calling the next one (about
 // one run in three, on OpenAI Realtime and Grok). With the slide number and
 // the total as arguments, the host knows where a slideshow is and can ask the
-// model to go on (src/composables/useSlideshow.ts). The picture comes from the
-// same context.app.generateImage as generateImage. Its View fits the whole
-// picture on the screen, as a slide should be seen (ui-image's ImageView,
-// which generateImage's View uses, fits a wide picture to the width and
-// scrolls; generateImage's own View renders only results named
+// model to go on (src/composables/useSequence.ts). The picture comes from the
+// same context.app.generateImage as generateImage, and its View fits it on the
+// screen (./sequence.ts; generateImage's own View renders only results named
 // "generateImage").
-import { defineComponent, h, markRaw, type PropType } from "vue";
 import type { ToolResult } from "gui-chat-protocol/vue";
-import {
-  ImagePreview,
-  type ImageToolData,
-  type ToolResult as ImageResult,
-} from "@mulmochat-plugin/ui-image";
 import type { ToolPlugin } from "./types";
+import {
+  createRepeatGuard,
+  fittedImageView,
+  imageOf,
+  imagePreview,
+  imageResult,
+  type SequenceStep,
+} from "./sequence";
 
 export const PRESENT_SLIDE = "presentSlide";
 
@@ -74,86 +74,29 @@ export const slideShownInstructions = ({
     : `${label}, the last one, is now on the screen. Explain it, then wrap up the slideshow.`;
 };
 
-/** For a slide that arrived after the user spoke (asked while they did). */
-export const slideAfterUserSpokeInstructions = ({
-  slide,
-  totalSlides,
-}: SlideArgs): string =>
-  `Slide ${slide} of ${totalSlides} is now on the screen, but the user spoke while it was being made. Respond to what they said; go on with the slideshow only if they want you to.`;
+/** The slideshow's place after a slide was shown, or null. */
+export function slideSequenceStep(
+  args: Record<string, unknown>,
+  result: ToolResult,
+): SequenceStep | null {
+  const slide = parseSlideArgs(args);
+  if (!slide || !imageOf(result).imageData) return null;
+  const { slide: step, totalSlides: total } = slide;
+  return {
+    step,
+    total,
+    kind: "slideshow",
+    label: `Slide ${step} of ${total}`,
+    onShown: "explain it",
+    nextCall: `call presentSlide for slide ${step + 1} of ${total}`,
+  };
+}
 
-// Gemini Live sometimes calls the next slide twice: once in the reply it
-// starts by itself after the tool output, once in the reply the instructions
-// start. The two calls are identical, so a slide asked for in the last minute
-// with the same number, total, title and picture is not made again; another
-// slideshow's "slide 1 of 4, Introduction" has another picture, and a later
-// "show slide 2 again" is outside the minute. A repeat that arrives while the
-// first is still being made waits for it: it may yet fail.
-const DUPLICATE_WINDOW_MS = 60_000;
-const recentSlides = new Map<string, { at: number; shown: Promise<boolean> }>();
+// An identical slide asked for twice (Gemini Live) is shown once.
+const repeats = createRepeatGuard();
 
 const slideKey = ({ slide, totalSlides, title, imagePrompt }: SlideArgs) =>
   JSON.stringify([slide, totalSlides, title, imagePrompt]);
-
-/** The earlier identical request, if one is recent enough to count. */
-function recentRequest(key: string) {
-  const now = Date.now();
-  for (const [k, entry] of recentSlides) {
-    if (now - entry.at > DUPLICATE_WINDOW_MS) recentSlides.delete(k);
-  }
-  return recentSlides.get(key);
-}
-
-// context.app.generateImage is typed as returning unknown.
-const isToolResult = (value: unknown): value is ToolResult =>
-  typeof value === "object" &&
-  value !== null &&
-  typeof (value as { message?: unknown }).message === "string";
-
-const View = markRaw(
-  defineComponent({
-    name: "PresentSlideView",
-    props: {
-      selectedResult: {
-        type: Object as PropType<ImageResult<ImageToolData>>,
-        required: true,
-      },
-    },
-    setup(props) {
-      return () =>
-        h(
-          "div",
-          {
-            class:
-              "h-full w-full flex items-center justify-center bg-white p-2",
-          },
-          props.selectedResult.data?.imageData
-            ? [
-                h("img", {
-                  src: props.selectedResult.data.imageData,
-                  alt: props.selectedResult.data.prompt ?? "",
-                  class: "max-w-full max-h-full object-contain",
-                }),
-              ]
-            : [],
-        );
-    },
-  }),
-);
-
-const Preview = markRaw(
-  defineComponent({
-    name: "PresentSlidePreview",
-    props: {
-      result: {
-        type: Object as PropType<ImageResult<ImageToolData>>,
-        required: true,
-      },
-    },
-    setup(props) {
-      return () => h(ImagePreview, { result: props.result });
-    },
-  }),
-);
 
 const plugin: ToolPlugin = {
   toolDefinition: {
@@ -186,8 +129,8 @@ const plugin: ToolPlugin = {
   systemPrompt: PRESENT_SLIDE_PROMPT,
   generatingMessage: "Making the slide...",
   isEnabled: () => true,
-  viewComponent: View,
-  previewComponent: Preview,
+  viewComponent: fittedImageView("PresentSlideView"),
+  previewComponent: imagePreview("PresentSlidePreview"),
   async execute(context, args) {
     const slide = parseSlideArgs(args as Record<string, unknown>);
     if (!slide) {
@@ -200,17 +143,14 @@ const plugin: ToolPlugin = {
       return { message: "image generation isn't available" };
     }
     const key = slideKey(slide);
-    const earlier = recentRequest(key);
-    if (earlier && (await earlier.shown)) {
+    if (await repeats.alreadyShown(key)) {
       // Not shown again, and no instructions: the model goes on by itself.
       return {
         message: `slide ${slide.slide} of ${slide.totalSlides} is already on the screen`,
         cancelled: true,
       };
     }
-    let settle: (shown: boolean) => void = () => {};
-    const shown = new Promise<boolean>((resolve) => (settle = resolve));
-    recentSlides.set(key, { at: Date.now(), shown });
+    const settle = repeats.begin(key);
     // The title leads the prompt as a slide's title, not as a bare sentence:
     // a question title first ("What is Photosynthesis?. A bright, sunny
     // day…") made Gemini return no image (finish reason NO_IMAGE) 4 times in
@@ -218,27 +158,15 @@ const plugin: ToolPlugin = {
     const prompt = slide.title
       ? `A presentation slide titled "${slide.title}". ${slide.imagePrompt}`
       : slide.imagePrompt;
-    let image: ToolResult;
-    try {
-      const generated: unknown = await context.app.generateImage(prompt);
-      image = isToolResult(generated)
-        ? generated
-        : { message: "image generation returned an unrecognized result" };
-    } catch (error) {
-      image = { message: `image generation failed: ${String(error)}` };
-    }
-    const data = image.data as { imageData?: unknown } | undefined;
+    const generateImage = context.app.generateImage;
+    const image = await imageResult(() => generateImage(prompt));
+    const { imageData, imagePath } = imageOf(image);
     // A failure keeps the image host's message and instructions, and may be
     // tried again.
-    if (typeof data?.imageData !== "string") {
-      if (recentSlides.get(key)?.shown === shown) recentSlides.delete(key);
-      settle(false);
-      return image;
-    }
-    settle(true);
+    settle(!!imageData);
+    if (!imageData) return image;
     // The image host saved the picture (artifacts/images/…); say where.
-    const saved = (image.data as { imagePath?: unknown }).imagePath;
-    const savedTo = typeof saved === "string" ? `; saved to ${saved}` : "";
+    const savedTo = imagePath ? `; saved to ${imagePath}` : "";
     return {
       ...image,
       message: `slide ${slide.slide} of ${slide.totalSlides} is on the screen${savedTo}`,

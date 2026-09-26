@@ -72,6 +72,10 @@ function createAppContext(): ToolContextApp {
     getConfig: () => undefined,
     setConfig: () => {},
     generateImage: generate,
+    // A MulmoGlass extension for its storyboard tool (src/tools/storyboard.ts):
+    // gui-chat-protocol's generateImage takes a prompt only.
+    generateImageWithReferences: (prompt: string, referenceImages: string[]) =>
+      generateImage(prompt, imageSettings(), referenceImages),
     // presentDocument: load/save/create documents and fill images
     ...createMarkdownHostApp(generate),
   };

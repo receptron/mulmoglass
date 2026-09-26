@@ -13,6 +13,13 @@ export interface ImageSettings {
   xaiKey: string;
 }
 
+// File extensions of the image types the APIs return.
+const EXTENSIONS: Readonly<Record<string, string>> = {
+  "image/png": "png",
+  "image/jpeg": "jpg",
+  "image/webp": "webp",
+};
+
 // Said to the model, which tells the user what to do.
 const missingKey = (name: string) =>
   new Error(
@@ -89,7 +96,17 @@ interface GeminiPart {
   inlineData?: { data?: string; mimeType?: string };
 }
 
-async function geminiImage(prompt: string, key: string): Promise<string> {
+// A reference image as the APIs take it: base64 and its type.
+interface ReferenceImage {
+  mimeType: string;
+  base64: string;
+}
+
+async function geminiImage(
+  prompt: string,
+  key: string,
+  references: ReferenceImage[],
+): Promise<string> {
   if (!key) throw missingKey("Gemini");
   const response = await request(
     "Gemini",
@@ -103,7 +120,16 @@ async function geminiImage(prompt: string, key: string): Promise<string> {
       // image. (MulmoClaude also asks for 16:9; here that image is taller than
       // the canvas in ui-image's View, which fits it to the width.)
       body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
+        contents: [
+          {
+            parts: [
+              ...references.map(({ mimeType, base64 }) => ({
+                inlineData: { mimeType, data: base64 },
+              })),
+              { text: prompt },
+            ],
+          },
+        ],
         generationConfig: { responseModalities: ["IMAGE"] },
       }),
     },
@@ -146,24 +172,54 @@ async function geminiImage(prompt: string, key: string): Promise<string> {
   return `data:${image.mimeType || "image/png"};base64,${image.data}`;
 }
 
-async function openaiImage(prompt: string, key: string): Promise<string> {
-  if (!key) throw missingKey("OpenAI");
-  const response = await request(
-    "OpenAI",
-    "https://api.openai.com/v1/images/generations",
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${key}`,
-      },
+// Reference images go to the edits endpoint, as multipart image[] files.
+function openaiRequest(
+  prompt: string,
+  references: ReferenceImage[],
+): { url: string; headers: Record<string, string>; body: BodyInit } {
+  if (!references.length) {
+    return {
+      url: "https://api.openai.com/v1/images/generations",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         model: IMAGE_MODELS.openai.model,
         prompt,
         size: "1024x1024",
       }),
-    },
-  );
+    };
+  }
+  const form = new FormData();
+  form.append("model", IMAGE_MODELS.openai.model);
+  form.append("prompt", prompt);
+  form.append("size", "1024x1024");
+  references.forEach(({ mimeType, base64 }, i) => {
+    const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+    const ext = EXTENSIONS[mimeType] ?? "png";
+    form.append(
+      "image[]",
+      new Blob([bytes], { type: mimeType }),
+      `ref${i}.${ext}`,
+    );
+  });
+  return {
+    url: "https://api.openai.com/v1/images/edits",
+    headers: {},
+    body: form,
+  };
+}
+
+async function openaiImage(
+  prompt: string,
+  key: string,
+  references: ReferenceImage[],
+): Promise<string> {
+  if (!key) throw missingKey("OpenAI");
+  const { url, headers, body: requestBody } = openaiRequest(prompt, references);
+  const response = await request("OpenAI", url, {
+    method: "POST",
+    headers: { ...headers, Authorization: `Bearer ${key}` },
+    body: requestBody,
+  });
   if (!response.ok) throw await httpFailure("OpenAI", response);
   const body = (await response.json()) as { data?: { b64_json?: string }[] };
   const b64 = body.data?.[0]?.b64_json;
@@ -172,11 +228,18 @@ async function openaiImage(prompt: string, key: string): Promise<string> {
 }
 
 // xAI's Images API (OpenAI-shaped). It returns JPEG and says so in mime_type.
-async function xaiImage(prompt: string, key: string): Promise<string> {
+// Reference images go to the edits endpoint, as an `images` list of data
+// URLs (a single `image` takes one).
+async function xaiImage(
+  prompt: string,
+  key: string,
+  references: ReferenceImage[],
+): Promise<string> {
   if (!key) throw missingKey("xAI");
+  const edits = references.length > 0;
   const response = await request(
     "xAI",
-    "https://api.x.ai/v1/images/generations",
+    `https://api.x.ai/v1/images/${edits ? "edits" : "generations"}`,
     {
       method: "POST",
       headers: {
@@ -187,6 +250,12 @@ async function xaiImage(prompt: string, key: string): Promise<string> {
         model: IMAGE_MODELS.xai.model,
         prompt,
         response_format: "b64_json",
+        ...(edits && {
+          images: references.map(({ mimeType, base64 }) => ({
+            type: "image_url",
+            url: `data:${mimeType};base64,${base64}`,
+          })),
+        }),
       }),
     },
   );
@@ -205,11 +274,6 @@ async function xaiImage(prompt: string, key: string): Promise<string> {
 // result keeps the data URL too: MulmoGlass has no server to turn a path into
 // a picture, so the Views show the data URL.
 const IMAGES_DIR = "images";
-const EXTENSIONS: Readonly<Record<string, string>> = {
-  "image/png": "png",
-  "image/jpeg": "jpg",
-  "image/webp": "webp",
-};
 
 /** Save a data URL; returns its workspace path, or null when it can't be. */
 async function saveImage(dataUrl: string): Promise<string | null> {
@@ -231,18 +295,60 @@ async function saveImage(dataUrl: string): Promise<string | null> {
   }
 }
 
-/** gui-chat-protocol's ToolContext.app.generateImage: (prompt) → ToolResult. */
+// A reference image is sent at most this many pixels on its longer side, as
+// a JPEG: a character sheet is 0.7–1 MB as generated, and a panel with three
+// characters sent them all, over the glasses' connection.
+const REFERENCE_MAX_SIDE = 768;
+const REFERENCE_QUALITY = 0.85;
+
+/** A data URL as a reference image, made smaller when it can be. */
+async function referenceImage(dataUrl: string): Promise<ReferenceImage> {
+  const match = /^data:([^;,]+);base64,(.*)$/.exec(dataUrl);
+  if (!match) throw new Error("a reference image isn't a data URL");
+  try {
+    const bitmap = await createImageBitmap(await (await fetch(dataUrl)).blob());
+    const scale = Math.min(
+      1,
+      REFERENCE_MAX_SIDE / Math.max(bitmap.width, bitmap.height),
+    );
+    const canvas = new OffscreenCanvas(
+      Math.round(bitmap.width * scale),
+      Math.round(bitmap.height * scale),
+    );
+    canvas
+      .getContext("2d")
+      ?.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    bitmap.close();
+    const blob = await canvas.convertToBlob({
+      type: "image/jpeg",
+      quality: REFERENCE_QUALITY,
+    });
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    let binary = "";
+    for (const byte of bytes) binary += String.fromCharCode(byte);
+    return { mimeType: "image/jpeg", base64: btoa(binary) };
+  } catch {
+    // Sent as it is.
+    return { mimeType: match[1], base64: match[2] };
+  }
+}
+
+/** gui-chat-protocol's ToolContext.app.generateImage: (prompt) → ToolResult.
+ *  `referenceImages` (data URLs) are pictures the new one should follow, such
+ *  as a storyboard's character sheets; every image service takes them. */
 export async function generateImage(
   prompt: string,
   settings: ImageSettings,
+  referenceImages: readonly string[] = [],
 ): Promise<ToolResult> {
   try {
+    const references = await Promise.all(referenceImages.map(referenceImage));
     const imageData =
       settings.backend === "openai"
-        ? await openaiImage(prompt, settings.openaiKey)
+        ? await openaiImage(prompt, settings.openaiKey, references)
         : settings.backend === "xai"
-          ? await xaiImage(prompt, settings.xaiKey)
-          : await geminiImage(prompt, settings.geminiKey);
+          ? await xaiImage(prompt, settings.xaiKey, references)
+          : await geminiImage(prompt, settings.geminiKey, references);
     const imagePath = await saveImage(imageData);
     return {
       data: { imageData, prompt, ...(imagePath ? { imagePath } : {}) },

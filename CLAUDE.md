@@ -153,9 +153,10 @@ A tool result's `instructions` decide whether the model keeps going, and even go
 always followed. Slideshows are `presentSlide` calls (`src/tools/presentSlide.ts`, one generated
 picture per slide, with the slide number and total as arguments), each telling the model to explain
 the slide and call the next one in the same reply. The model still ended replies mid-slideshow
-(about one run in three with generateImage and "Slide N of M" prompts), so `useSlideshow` asks it
+(about one run in three with generateImage and "Slide N of M" prompts), so `useSequence` asks it
 once per slide to go on when a reply ends, nothing plays or runs, and slides are left; the user
-speaking stops that. A slide asked for before the user spoke gets instructions to answer them first
+speaking stops that. Storyboards are sequences too (below); a tool that should be kept going this
+way returns its place from `src/tools/sequences.ts`, and shares the pieces in `src/tools/sequence.ts`. A slide asked for before the user spoke gets instructions to answer them first
 instead of its own "go on" (Gemini and Grok otherwise said "I've stopped" and carried on), unless
 it failed. The host can notice speech late or not at all (Gemini's input transcript arrives seconds
 after; `interrupted` helps only when the model was talking), so a slide's instructions and the
@@ -163,6 +164,17 @@ host's request to go on both also tell the model to answer a user who asked to s
 Live sometimes called the next slide twice (once in the reply it starts after a tool output, once in
 the one the instructions start); an identical call within a minute is dropped, after waiting for the
 first to be made.
+
+Storyboards (`src/tools/storyboard.ts`) tell a story in pictures with characters who look the same
+throughout: `defineStoryboard` draws a reference sheet per character, in parallel, and shows the
+cast; `presentPanel` draws each panel with the sheets of the characters in it as reference images.
+Every image service takes them: Gemini as `inlineData` parts, OpenAI on `/v1/images/edits` (multipart
+`image[]`), xAI on `/v1/images/edits` as an `images` list (a single `image` takes one). They are
+shrunk to 768 px JPEG first. gui-chat-protocol's `generateImage` takes a prompt only, so the host adds
+`context.app.generateImageWithReferences`. A description repeated in each prompt did not keep a
+character the same; the reference sheets did, on all three. The storyboard is saved as
+`artifacts/storyboards/<id>.json` in MulmoCast's shape (characters are `imageParams.images`, a
+panel's characters a beat's `imageNames`), so it can become a MulmoScript.
 
 Gemini's image model answers some prompts with text and no image (one call in three for a prompt
 that reads like a question, such as a slide about ATP's structure) unless the request sets
