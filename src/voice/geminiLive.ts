@@ -205,6 +205,12 @@ export function useGeminiLive(options: VoiceSessionOptions): VoiceSession {
 
     // Handle tool calls (Google's actual format)
     if (data.toolCall) {
+      // A reply can be a tool call alone, with no modelTurn: the user's turn
+      // is over here too, so a "stop" said while the tool runs is new speech.
+      if (userSpeaking) {
+        userSpeaking = false;
+        handlers.onSpeechStopped?.();
+      }
       const functionCalls = data.toolCall.functionCalls || [];
 
       for (const fc of functionCalls) {
@@ -246,7 +252,12 @@ export function useGeminiLive(options: VoiceSessionOptions): VoiceSession {
       const serverContent = data.serverContent;
 
       // The user is speaking (see inputAudioTranscription): once per turn.
-      if (serverContent.inputTranscription?.text && !userSpeaking) {
+      // The transcript can arrive seconds late; `interrupted` (the user
+      // talked over the model) says so sooner when the model was speaking.
+      if (
+        (serverContent.inputTranscription?.text || serverContent.interrupted) &&
+        !userSpeaking
+      ) {
         userSpeaking = true;
         handlers.onSpeechStarted?.();
       }

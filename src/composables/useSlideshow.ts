@@ -7,7 +7,8 @@
 // Asked once per slide: a model that still doesn't go on has a reason (it is
 // answering something else), and asking again would loop. The user speaking
 // ends the tracking: they may have said "stop", and if they said "go on", the
-// next slide starts it again.
+// next slide starts it again. Speech can be noticed late (Gemini's transcript
+// of it arrives seconds after), so the request itself also defers to the user.
 import type { ToolResult } from "gui-chat-protocol/vue";
 import {
   PRESENT_SLIDE,
@@ -55,19 +56,23 @@ export function useSlideshow(options: UseSlideshowOptions) {
     // A duplicate slide (see presentSlide.ts) changes nothing.
     if (name !== PRESENT_SLIDE || result.cancelled) return undefined;
     const slide = parseSlideArgs(args);
-    if (startedAt <= stoppedAt) {
-      return slide && result.instructions
-        ? slideAfterUserSpokeInstructions(slide)
-        : undefined;
-    }
     const shown =
       typeof (result.data as { imageData?: unknown } | undefined)?.imageData ===
       "string";
+    if (startedAt <= stoppedAt) {
+      // A slide that failed keeps its failure's instructions.
+      return slide && shown
+        ? slideAfterUserSpokeInstructions(slide)
+        : undefined;
+    }
     // A slide that failed (no key, a refused prompt) would fail again.
     if (!slide || !shown || slide.slide >= slide.totalSlides) {
       stop();
       return undefined;
     }
+    // A check set before this slide arrived would ask for the slide its own
+    // instructions are about to ask for.
+    cancelCheck();
     progress = { shown: slide.slide, total: slide.totalSlides, asked: false };
     return undefined;
   };
@@ -83,7 +88,7 @@ export function useSlideshow(options: UseSlideshowOptions) {
       const next = progress.shown + 1;
       console.info(`[slideshow] asking for slide ${next} of ${progress.total}`);
       options.sendInstructions(
-        `Continue the slideshow: call presentSlide for slide ${next} of ${progress.total} now, and explain it when it appears.`,
+        `Continue the slideshow: call presentSlide for slide ${next} of ${progress.total} now, and explain it when it appears. If the user has just asked you to stop or asked something else, answer them instead.`,
       );
     }, GRACE_MS);
   };

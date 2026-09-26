@@ -156,7 +156,10 @@ the slide and call the next one in the same reply. The model still ended replies
 (about one run in three with generateImage and "Slide N of M" prompts), so `useSlideshow` asks it
 once per slide to go on when a reply ends, nothing plays or runs, and slides are left; the user
 speaking stops that. A slide asked for before the user spoke gets instructions to answer them first
-instead of its own "go on" (Gemini and Grok otherwise said "I've stopped" and carried on). Gemini
+instead of its own "go on" (Gemini and Grok otherwise said "I've stopped" and carried on), unless
+it failed. The host can notice speech late or not at all (Gemini's input transcript arrives seconds
+after; `interrupted` helps only when the model was talking), so a slide's instructions and the
+host's request to go on both also tell the model to answer a user who asked to stop. Gemini
 Live sometimes called the next slide twice (once in the reply it starts after a tool output, once in
 the one the instructions start); an identical call within a minute is dropped, after waiting for the
 first to be made.

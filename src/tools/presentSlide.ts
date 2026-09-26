@@ -67,9 +67,10 @@ export const slideShownInstructions = ({
   const titled = title ? ` ("${title}")` : "";
   const label = `Slide ${slide} of ${totalSlides}${titled}`;
   // The length of each explanation is the model's call: some slides need a
-  // sentence, some a paragraph.
+  // sentence, some a paragraph. The "stop" clause is for when the host missed
+  // the user's speech (Gemini can report it too late): the model heard it.
   return slide < totalSlides
-    ? `${label} is now on the screen. Explain it, then, in this same reply and without waiting for the user, call presentSlide for slide ${slide + 1}.`
+    ? `${label} is now on the screen. Explain it, then, in this same reply and without waiting for the user, call presentSlide for slide ${slide + 1}. If the user has asked you to stop, or asked something else, since the slideshow began, answer them instead of going on.`
     : `${label}, the last one, is now on the screen. Explain it, then wrap up the slideshow.`;
 };
 
