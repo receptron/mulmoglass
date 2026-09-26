@@ -4,6 +4,7 @@
 // (server/plugins/appContext.ts), so generateImage's View renders it.
 import type { ToolResult } from "gui-chat-protocol";
 import { IMAGE_MODELS, type ImageBackend } from "../config/models";
+import { artifactsFileOps } from "./workspace";
 
 export interface ImageSettings {
   backend: ImageBackend;
@@ -198,6 +199,38 @@ async function xaiImage(prompt: string, key: string): Promise<string> {
   return `data:${image.mime_type || "image/jpeg"};base64,${image.b64_json}`;
 }
 
+// Every generated image is saved as artifacts/images/<YYYY>/<MM>/<id>.<ext>,
+// as MulmoClaude does (server/utils/files/image-store.ts), and its path goes
+// to the model in the result, so a later tool call can refer to it. The
+// result keeps the data URL too: MulmoGlass has no server to turn a path into
+// a picture, so the Views show the data URL.
+const IMAGES_DIR = "images";
+const EXTENSIONS: Readonly<Record<string, string>> = {
+  "image/png": "png",
+  "image/jpeg": "jpg",
+  "image/webp": "webp",
+};
+
+/** Save a data URL; returns its workspace path, or null when it can't be. */
+async function saveImage(dataUrl: string): Promise<string | null> {
+  const match = /^data:([^;,]+);base64,(.*)$/.exec(dataUrl);
+  const ext = match ? EXTENSIONS[match[1]] : undefined;
+  if (!match || !ext) return null;
+  const now = new Date();
+  const month = String(now.getUTCMonth() + 1).padStart(2, "0");
+  const id = crypto.randomUUID().replaceAll("-", "").slice(0, 12);
+  const rel = `${IMAGES_DIR}/${now.getUTCFullYear()}/${month}/${id}.${ext}`;
+  try {
+    const bytes = Uint8Array.from(atob(match[2]), (c) => c.charCodeAt(0));
+    await artifactsFileOps.write(rel, bytes);
+    return `artifacts/${rel}`;
+  } catch (error) {
+    // Out of storage, say: the picture still shows, just without a path.
+    console.warn("[image] could not save the image", error);
+    return null;
+  }
+}
+
 /** gui-chat-protocol's ToolContext.app.generateImage: (prompt) → ToolResult. */
 export async function generateImage(
   prompt: string,
@@ -210,9 +243,12 @@ export async function generateImage(
         : settings.backend === "xai"
           ? await xaiImage(prompt, settings.xaiKey)
           : await geminiImage(prompt, settings.geminiKey);
+    const imagePath = await saveImage(imageData);
     return {
-      data: { imageData, prompt },
-      message: "image generation succeeded",
+      data: { imageData, prompt, ...(imagePath ? { imagePath } : {}) },
+      message: imagePath
+        ? `image generation succeeded; saved to ${imagePath}`
+        : "image generation succeeded",
       instructions:
         "Acknowledge that the image was generated and has been already presented to the user.",
     };
