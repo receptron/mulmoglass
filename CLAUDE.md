@@ -115,7 +115,7 @@ Define a shared value once. The copies that exist are debt, not precedent:
 | Follow-up instructions | `response.create` with `instructions` appended to the session's (alone, they would replace the system prompt and the user's language for that reply) | a user turn | a user message + `response.create` (its `instructions` would replace the system prompt) |
 | Overlapping replies | held until `response.done`, once (else `conversation_already_has_active_response`, seen in testing); each request is settled only by its own `event_id` / `metadata.request_id`, since the server starts responses of its own | n/a | held until `response.done`, once |
 | Captions | `response.output_audio_transcript.*` | `outputAudioTranscription` | `response.output_audio_transcript.*` |
-| Speech started/stopped | yes | **no events**, so the status never shows "Listening…" | yes |
+| Speech started/stopped | yes | no events of its own: started when the first `inputTranscription` of a turn arrives (after the user began), stopped when the model's turn starts | yes |
 | Stop during connect / stale socket close | guarded | **not guarded** (known gap, as in MulmoChat) | guarded |
 
 `sendUserText` exists only for Views (a quiz answer, a game move). The user never types.
@@ -149,10 +149,32 @@ says to use a tool only when it answers the request and never to make up facts i
 When a question needs live data (weather, news, prices), give the model a tool that has it (the
 weather plugin, JMA, Japan only) rather than expecting it to decline.
 
-A tool result's `instructions` decide whether the model keeps going. generateImage's said only
-"acknowledge that the image was generated", which ended a slideshow after its first slide, so a
-generated image now gets `IMAGE_SHOWN_INSTRUCTIONS` (`src/tools/index.ts`): explain the slide, then
-call generateImage for the next one in the same reply. Grok still stops early now and then.
+A tool result's `instructions` decide whether the model keeps going, and even good ones are not
+always followed. Slideshows are `presentSlide` calls (`src/tools/presentSlide.ts`, one generated
+picture per slide, with the slide number and total as arguments), each telling the model to explain
+the slide and call the next one in the same reply. The model still ended replies mid-slideshow
+(about one run in three with generateImage and "Slide N of M" prompts), so `useSlideshow` asks it
+once per slide to go on when a reply ends, nothing plays or runs, and slides are left; the user
+speaking stops that. A slide asked for before the user spoke gets instructions to answer them first
+instead of its own "go on" (Gemini and Grok otherwise said "I've stopped" and carried on), unless
+it failed. The host can notice speech late or not at all (Gemini's input transcript arrives seconds
+after; `interrupted` helps only when the model was talking), so a slide's instructions and the
+host's request to go on both also tell the model to answer a user who asked to stop. Gemini
+Live sometimes called the next slide twice (once in the reply it starts after a tool output, once in
+the one the instructions start); an identical call within a minute is dropped, after waiting for the
+first to be made.
+
+Gemini's image model answers some prompts with text and no image (one call in three for a prompt
+that reads like a question, such as a slide about ATP's structure) unless the request sets
+`responseModalities: ["IMAGE"]` (`src/host/imageGeneration.ts`). Even then, a prompt that opens with a
+question ("What is Photosynthesis?. A bright, sunny day…", presentSlide's title then its prompt)
+got no image (finish reason `NO_IMAGE`) 4 times in 12; `A presentation slide titled "…". …` got 0.
+
+An image failure's reason goes to the model, which repeats it to the user, so it is one accurate
+sentence: the API's own error message with a hint by status, "refused under its content policy" for
+Gemini's refusal finish reasons, or the start of a text-only answer. The raw response made the model
+invent a reason ("the prompt was too long"). OpenAI's 401 for a wrong key carries no CORS header, so
+the browser sees a network error; that reason names both.
 
 ## Debugging
 

@@ -162,6 +162,7 @@ import {
   useSettings,
 } from "./composables/useSettings";
 import { useToolResults } from "./composables/useToolResults";
+import { useSlideshow } from "./composables/useSlideshow";
 import { useVoiceSession } from "./voice/useVoiceSession";
 import {
   getToolPlugin,
@@ -186,7 +187,7 @@ const settings = useSettings();
 // places" prompt, made the model paint a picture of "Tokyo's weather" when
 // asked for the forecast.
 const BASE_PROMPT =
-  "You are MulmoGlass, a voice assistant running on the user's VR glasses. The user talks to you; they can't type. Tool results appear on a large screen in front of them. Use a tool when it answers the request (a chart for data, a document for an explanation, the weather tool for a forecast), not just to put something on the screen. Never make up facts you don't have, such as live weather, news or prices: use a tool that provides them, or say you can't check. Keep your spoken replies short. When the user asks for a slideshow, plan four to six slides, then show them one at a time: call generateImage for the first slide, explain each slide when it appears, then go on to the next, to the end, without asking whether to continue.";
+  "You are MulmoGlass, a voice assistant running on the user's VR glasses. The user talks to you; they can't type. Tool results appear on a large screen in front of them. Use a tool when it answers the request (a chart for data, a document for an explanation, the weather tool for a forecast), not just to put something on the screen. Never make up facts you don't have, such as live weather, news or prices: use a tool that provides them, or say you can't check. Keep your spoken replies short.";
 
 const buildInstructions = () =>
   `${BASE_PROMPT}\n${pluginSystemPrompts()}\nThe user's native language is ${getLanguageName(settings.language)}.`;
@@ -234,7 +235,24 @@ const {
   handleToolCall,
   updateResult,
   select,
-} = useToolResults({ sendFunctionCallOutput, sendInstructions, isConnected });
+} = useToolResults({
+  sendFunctionCallOutput,
+  sendInstructions,
+  isConnected,
+  onResult: (name, args, result, startedAt) =>
+    slideshow.observeToolResult(name, args, result, startedAt),
+});
+
+// Asks the model to go on when it ends a reply mid-slideshow.
+const slideshow = useSlideshow({
+  isIdle: () =>
+    chatActive.value &&
+    !conversationActive.value &&
+    !isAudioPlaying.value &&
+    !userSpeaking.value &&
+    !runningMessage.value,
+  sendInstructions,
+});
 
 setImageSettingsSource(() => ({
   backend: settings.imageBackend,
@@ -269,10 +287,17 @@ const errorText = (error: unknown): string => {
 
 session.registerEventHandlers({
   onToolCall: (msg, __id, argStr) => handleToolCall(msg, argStr),
-  onSpeechStarted: () => (userSpeaking.value = true),
+  onSpeechStarted: () => {
+    userSpeaking.value = true;
+    slideshow.stop();
+  },
+  onConversationFinished: () => slideshow.replyEnded(),
   onSpeechStopped: () => (userSpeaking.value = false),
   onAudioPlaybackStarted: () => (isAudioPlaying.value = true),
-  onAudioPlaybackStopped: () => (isAudioPlaying.value = false),
+  onAudioPlaybackStopped: () => {
+    isAudioPlaying.value = false;
+    slideshow.replyEnded();
+  },
   onTranscriptDelta: (delta) => {
     // A new reply replaces the previous caption.
     if (captionDone) {
@@ -315,6 +340,7 @@ function setMute(muted: boolean) {
 async function toggleChat() {
   errorMessage.value = "";
   if (chatActive.value || connecting.value) {
+    slideshow.stop();
     session.stopChat();
     return;
   }

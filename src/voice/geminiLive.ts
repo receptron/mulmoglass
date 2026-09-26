@@ -57,6 +57,7 @@ interface GoogleModelTurn {
 interface GoogleServerContent {
   modelTurn?: GoogleModelTurn;
   outputTranscription?: { text?: string };
+  inputTranscription?: { text?: string };
   turnComplete?: boolean;
   interrupted?: boolean;
 }
@@ -85,6 +86,9 @@ interface GoogleSetupConfig {
   model: string;
   // Captions: a transcript of the model's speech
   outputAudioTranscription?: Record<string, never>;
+  // A transcript of the user's speech: Gemini Live sends no speech-started
+  // event, so its first text in a turn is the sign that the user spoke.
+  inputAudioTranscription?: Record<string, never>;
   generationConfig?: GoogleGenerationConfig;
   systemInstruction?: GoogleSystemInstruction;
   tools?: GoogleToolDeclarations[];
@@ -114,6 +118,9 @@ export function useGeminiLive(options: VoiceSessionOptions): VoiceSession {
   const isMuted = ref(false);
   const pendingToolCalls = new Map<string, PendingToolCall>();
   const processedToolCalls = new Set<string>();
+  // Set by the user's first transcribed words in a turn, cleared when the
+  // model's turn starts.
+  let userSpeaking = false;
 
   const googleLive: GoogleLiveState = {
     ws: null,
@@ -198,6 +205,12 @@ export function useGeminiLive(options: VoiceSessionOptions): VoiceSession {
 
     // Handle tool calls (Google's actual format)
     if (data.toolCall) {
+      // A reply can be a tool call alone, with no modelTurn: the user's turn
+      // is over here too, so a "stop" said while the tool runs is new speech.
+      if (userSpeaking) {
+        userSpeaking = false;
+        handlers.onSpeechStopped?.();
+      }
       const functionCalls = data.toolCall.functionCalls || [];
 
       for (const fc of functionCalls) {
@@ -238,8 +251,23 @@ export function useGeminiLive(options: VoiceSessionOptions): VoiceSession {
     if (data.serverContent) {
       const serverContent = data.serverContent;
 
+      // The user is speaking (see inputAudioTranscription): once per turn.
+      // The transcript can arrive seconds late; `interrupted` (the user
+      // talked over the model) says so sooner when the model was speaking.
+      if (
+        (serverContent.inputTranscription?.text || serverContent.interrupted) &&
+        !userSpeaking
+      ) {
+        userSpeaking = true;
+        handlers.onSpeechStarted?.();
+      }
+
       // Check for model turn
       if (serverContent.modelTurn) {
+        if (userSpeaking) {
+          userSpeaking = false;
+          handlers.onSpeechStopped?.();
+        }
         conversationActive.value = true;
         handlers.onConversationStarted?.();
 
@@ -345,6 +373,7 @@ export function useGeminiLive(options: VoiceSessionOptions): VoiceSession {
       model: modelId.startsWith("models/") ? modelId : `models/${modelId}`,
       generationConfig,
       outputAudioTranscription: {},
+      inputAudioTranscription: {},
     };
 
     // Add system instruction if provided
@@ -405,6 +434,7 @@ export function useGeminiLive(options: VoiceSessionOptions): VoiceSession {
   };
 
   const stopChat = () => {
+    userSpeaking = false;
     if (googleLive.ws) {
       googleLive.ws.close();
       googleLive.ws = null;

@@ -11,6 +11,15 @@ interface UseToolResultsOptions {
   sendFunctionCallOutput: (callId: string, output: string) => boolean;
   sendInstructions: (instructions: string) => boolean;
   isConnected: () => boolean;
+  /** Every result, before its instructions go to the model, with when its
+   *  call started (performance.now()). Returns instructions to send instead
+   *  of the result's, or undefined to keep them. */
+  onResult?: (
+    name: string,
+    args: Record<string, unknown>,
+    result: ToolResult,
+    startedAt: number,
+  ) => string | undefined;
 }
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -80,15 +89,18 @@ export function useToolResults(options: UseToolResultsOptions) {
         cancelled: result.cancelled,
       });
       if (!result.cancelled) addOrUpdate(result, previous);
+      const instructions =
+        options.onResult?.(msg.name, args, result, started) ??
+        result.instructions;
       sendOutput(msg.call_id, {
         status: result.message,
         data: result.jsonData,
       });
-      if (result.instructions) {
+      if (instructions) {
         if (plugin?.delayAfterExecution) {
           await sleep(plugin.delayAfterExecution);
         }
-        options.sendInstructions(result.instructions);
+        options.sendInstructions(instructions);
       }
     } catch (error) {
       const message = `Tool execution failed: ${error}`;
