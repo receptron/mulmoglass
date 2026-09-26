@@ -167,6 +167,11 @@ that reads like a question, such as a slide about ATP's structure) unless the re
 question ("What is Photosynthesis?. A bright, sunny day…", presentSlide's title then its prompt)
 got no image (finish reason `NO_IMAGE`) 4 times in 12; `A presentation slide titled "…". …` got 0.
 
+Every generated image is saved to `artifacts/images/<YYYY>/<MM>/<id>.<ext>` in OPFS, as MulmoClaude
+saves its images, and the tool result tells the model the path ("saved to …"), so a later call can
+refer to it. The result keeps the data URL as well: without a server, a workspace path is not
+something an `<img>` can load, so anything that shows a saved image by path must read it from OPFS.
+
 An image failure's reason goes to the model, which repeats it to the user, so it is one accurate
 sentence: the API's own error message with a hint by status, "refused under its content policy" for
 Gemini's refusal finish reasons, or the start of a text-only answer. The raw response made the model

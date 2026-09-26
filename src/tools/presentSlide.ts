@@ -235,9 +235,12 @@ const plugin: ToolPlugin = {
       return image;
     }
     settle(true);
+    // The image host saved the picture (artifacts/images/…); say where.
+    const saved = (image.data as { imagePath?: unknown }).imagePath;
+    const savedTo = typeof saved === "string" ? `; saved to ${saved}` : "";
     return {
       ...image,
-      message: `slide ${slide.slide} of ${slide.totalSlides} is on the screen`,
+      message: `slide ${slide.slide} of ${slide.totalSlides} is on the screen${savedTo}`,
       instructions: slideShownInstructions(slide),
     };
   },
