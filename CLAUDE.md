@@ -113,7 +113,7 @@ Define a shared value once. The copies that exist are debt, not precedent:
 |---|---|---|---|
 | Connection | WebRTC, ephemeral key minted in the browser | WebSocket, the raw Gemini key in the URL | WebSocket, client secret as the `xai-client-secret.<secret>` subprotocol |
 | Follow-up instructions | `response.create` with `instructions` appended to the session's (alone, they would replace the system prompt and the user's language for that reply) | a user turn | a user message + `response.create` (its `instructions` would replace the system prompt) |
-| Overlapping replies | held until `response.done`, once (else `conversation_already_has_active_response`, seen in testing) | n/a | held until `response.done`, once |
+| Overlapping replies | held until `response.done`, once (else `conversation_already_has_active_response`, seen in testing); each request is settled only by its own `event_id` / `metadata.request_id`, since the server starts responses of its own | n/a | held until `response.done`, once |
 | Captions | `response.output_audio_transcript.*` | `outputAudioTranscription` | `response.output_audio_transcript.*` |
 | Speech started/stopped | yes | **no events**, so the status never shows "Listening…" | yes |
 | Stop during connect / stale socket close | guarded | **not guarded** (known gap, as in MulmoChat) | guarded |
