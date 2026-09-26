@@ -56,7 +56,24 @@ const PRESENT_HTML_PROMPT = `Use presentHtml when the user asks for HTML output,
 // of a city into a picture, including answers it has no data for (a "weather
 // in Tokyo" illustration), so MulmoGlass replaces it.
 const GENERATE_IMAGE_PROMPT =
-  "Use generateImage when the user asks for a picture, or when an illustration clearly helps explain what you are talking about. Never use an image in place of information you don't have: an image can't show today's weather, the news or a price.";
+  "Use generateImage when the user asks for a picture or a slideshow, or when an illustration clearly helps explain what you are talking about. Never use an image in place of information you don't have: an image can't show today's weather, the news or a price.";
+
+// What the model does once an image is on the screen. The host's result says
+// only "acknowledge that the image was generated", which ended a slideshow
+// after its first slide.
+const IMAGE_SHOWN_INSTRUCTIONS =
+  "The image is now on the screen. If it is a slide of a slideshow you are giving, explain it in two or three sentences, then, in this same reply and without waiting for the user, call generateImage for the next slide; after the last slide, wrap up briefly. Otherwise, say in one sentence what it shows.";
+
+// A generated image gets IMAGE_SHOWN_INSTRUCTIONS; a failure keeps its own.
+const withImageShownInstructions =
+  (execute: PluginExecute): PluginExecute =>
+  async (context, args) => {
+    const result = await execute(context, args);
+    const data = result.data as { imageData?: unknown } | undefined;
+    return typeof data?.imageData === "string"
+      ? { ...result, instructions: IMAGE_SHOWN_INSTRUCTIONS }
+      : result;
+  };
 
 const registeredPlugins: { plugin: ToolPlugin }[] = [
   {
@@ -101,7 +118,11 @@ for (const { plugin } of registeredPlugins) {
   const toolName = plugin.toolDefinition.name;
   const execute = plugin.execute as PluginExecute;
   executes[toolName] =
-    toolName === "presentHtml" ? withHtmlPreviewUrl(execute) : execute;
+    toolName === "presentHtml"
+      ? withHtmlPreviewUrl(execute)
+      : toolName === "generateImage"
+        ? withImageShownInstructions(execute)
+        : execute;
   plugins[toolName] = {
     ...plugin,
     viewComponent:

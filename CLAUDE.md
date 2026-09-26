@@ -112,7 +112,7 @@ Define a shared value once. The copies that exist are debt, not precedent:
 | | OpenAI Realtime | Gemini Live | Grok Voice |
 |---|---|---|---|
 | Connection | WebRTC, ephemeral key minted in the browser | WebSocket, the raw Gemini key in the URL | WebSocket, client secret as the `xai-client-secret.<secret>` subprotocol |
-| Follow-up instructions | `response.create` with `instructions` | a user turn | a user message + `response.create` (its `instructions` would replace the system prompt) |
+| Follow-up instructions | `response.create` with `instructions` appended to the session's (alone, they would replace the system prompt and the user's language for that reply) | a user turn | a user message + `response.create` (its `instructions` would replace the system prompt) |
 | Overlapping replies | held until `response.done`, once (else `conversation_already_has_active_response`, seen in testing) | n/a | held until `response.done`, once |
 | Captions | `response.output_audio_transcript.*` | `outputAudioTranscription` | `response.output_audio_transcript.*` |
 | Speech started/stopped | yes | **no events**, so the status never shows "Listening…" | yes |
@@ -148,6 +148,11 @@ instead of a forecast. MulmoGlass overrides it (`GENERATE_IMAGE_PROMPT`), and th
 says to use a tool only when it answers the request and never to make up facts it doesn't have.
 When a question needs live data (weather, news, prices), give the model a tool that has it (the
 weather plugin, JMA, Japan only) rather than expecting it to decline.
+
+A tool result's `instructions` decide whether the model keeps going. generateImage's said only
+"acknowledge that the image was generated", which ended a slideshow after its first slide, so a
+generated image now gets `IMAGE_SHOWN_INSTRUCTIONS` (`src/tools/index.ts`): explain the slide, then
+call generateImage for the next one in the same reply. Grok still stops early now and then.
 
 ## Debugging
 

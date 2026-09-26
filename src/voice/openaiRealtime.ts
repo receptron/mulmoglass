@@ -90,6 +90,11 @@ export function useOpenAIRealtime(options: VoiceSessionOptions): VoiceSession {
   let heldResponse: { instructions: string[] } | null = null;
   // The instructions of the response.create awaiting response.created.
   let requestedInstructions: string | undefined;
+  // A response.create's `instructions` replace the session's for that
+  // response, which would drop the base prompt, the plugins' prompts and the
+  // user's language (a slideshow's next slide came back in English, without
+  // its rules). So a follow-up is sent as the session's plus its own.
+  let sessionInstructions = "";
 
   const requestResponse = (instructions?: string): boolean => {
     if (responseActive) {
@@ -102,7 +107,9 @@ export function useOpenAIRealtime(options: VoiceSessionOptions): VoiceSession {
     requestedInstructions = instructions;
     return send({
       type: "response.create",
-      response: instructions ? { instructions } : {},
+      response: instructions
+        ? { instructions: `${sessionInstructions}\n\n${instructions}` }
+        : {},
     });
   };
 
@@ -258,12 +265,13 @@ export function useOpenAIRealtime(options: VoiceSessionOptions): VoiceSession {
       const channel = peer.createDataChannel("oai-events");
       dc = channel;
       channel.addEventListener("open", () => {
+        sessionInstructions = options.buildInstructions();
         send({
           type: "session.update",
           session: {
             type: "realtime",
             model,
-            instructions: options.buildInstructions(),
+            instructions: sessionInstructions,
             audio: { output: { voice: VOICE } },
             tools: options.buildTools(),
           },
