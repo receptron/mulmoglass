@@ -160,7 +160,9 @@ after a tool output, once in the one the instructions start); a repeat within a 
 
 Gemini's image model answers some prompts with text and no image (one call in three for a prompt
 that reads like a question, such as a slide about ATP's structure) unless the request sets
-`responseModalities: ["IMAGE"]` (`src/host/imageGeneration.ts`).
+`responseModalities: ["IMAGE"]` (`src/host/imageGeneration.ts`). Even then, a prompt that opens with a
+question ("What is Photosynthesis?. A bright, sunny day…", presentSlide's title then its prompt)
+got no image (finish reason `NO_IMAGE`) 4 times in 12; `A presentation slide titled "…". …` got 0.
 
 An image failure's reason goes to the model, which repeats it to the user, so it is one accurate
 sentence: the API's own error message with a hint by status, "refused under its content policy" for

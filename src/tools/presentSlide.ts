@@ -189,8 +189,12 @@ const plugin: ToolPlugin = {
       };
     }
     recentSlides.set(key, Date.now());
+    // The title leads the prompt as a slide's title, not as a bare sentence:
+    // a question title first ("What is Photosynthesis?. A bright, sunny
+    // day…") made Gemini return no image (finish reason NO_IMAGE) 4 times in
+    // 12; framed like this, 0 in 12.
     const prompt = slide.title
-      ? `${slide.title}. ${slide.imagePrompt}`
+      ? `A presentation slide titled "${slide.title}". ${slide.imagePrompt}`
       : slide.imagePrompt;
     const image: ToolResult = await context.app.generateImage(prompt);
     const data = image.data as { imageData?: unknown } | undefined;
