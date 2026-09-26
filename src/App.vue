@@ -239,8 +239,8 @@ const {
   sendFunctionCallOutput,
   sendInstructions,
   isConnected,
-  onResult: (name, args, result) =>
-    slideshow.observeToolResult(name, args, result),
+  onResult: (name, args, result, startedAt) =>
+    slideshow.observeToolResult(name, args, result, startedAt),
 });
 
 // Asks the model to go on when it ends a reply mid-slideshow.

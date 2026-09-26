@@ -66,29 +66,47 @@ export const slideShownInstructions = ({
 }: SlideArgs): string => {
   const titled = title ? ` ("${title}")` : "";
   const label = `Slide ${slide} of ${totalSlides}${titled}`;
+  // The length of each explanation is the model's call: some slides need a
+  // sentence, some a paragraph.
   return slide < totalSlides
-    ? `${label} is now on the screen. Explain it in two or three sentences, then, in this same reply and without waiting for the user, call presentSlide for slide ${slide + 1}.`
-    : `${label}, the last one, is now on the screen. Explain it in two or three sentences, then wrap up the slideshow briefly.`;
+    ? `${label} is now on the screen. Explain it, then, in this same reply and without waiting for the user, call presentSlide for slide ${slide + 1}.`
+    : `${label}, the last one, is now on the screen. Explain it, then wrap up the slideshow.`;
 };
+
+/** For a slide that arrived after the user spoke (asked while they did). */
+export const slideAfterUserSpokeInstructions = ({
+  slide,
+  totalSlides,
+}: SlideArgs): string =>
+  `Slide ${slide} of ${totalSlides} is now on the screen, but the user spoke while it was being made. Respond to what they said; go on with the slideshow only if they want you to.`;
 
 // Gemini Live sometimes calls the next slide twice: once in the reply it
 // starts by itself after the tool output, once in the reply the instructions
-// start. A slide shown (or being made) in the last minute with the same
-// number, total and title is not made again; a later "show slide 2 again"
-// still works.
+// start. The two calls are identical, so a slide asked for in the last minute
+// with the same number, total, title and picture is not made again; another
+// slideshow's "slide 1 of 4, Introduction" has another picture, and a later
+// "show slide 2 again" is outside the minute. A repeat that arrives while the
+// first is still being made waits for it: it may yet fail.
 const DUPLICATE_WINDOW_MS = 60_000;
-const recentSlides = new Map<string, number>();
+const recentSlides = new Map<string, { at: number; shown: Promise<boolean> }>();
 
-const slideKey = ({ slide, totalSlides, title }: SlideArgs) =>
-  `${slide}/${totalSlides}/${title}`;
+const slideKey = ({ slide, totalSlides, title, imagePrompt }: SlideArgs) =>
+  JSON.stringify([slide, totalSlides, title, imagePrompt]);
 
-function isDuplicate(key: string): boolean {
+/** The earlier identical request, if one is recent enough to count. */
+function recentRequest(key: string) {
   const now = Date.now();
-  for (const [k, at] of recentSlides) {
-    if (now - at > DUPLICATE_WINDOW_MS) recentSlides.delete(k);
+  for (const [k, entry] of recentSlides) {
+    if (now - entry.at > DUPLICATE_WINDOW_MS) recentSlides.delete(k);
   }
-  return recentSlides.has(key);
+  return recentSlides.get(key);
 }
+
+// context.app.generateImage is typed as returning unknown.
+const isToolResult = (value: unknown): value is ToolResult =>
+  typeof value === "object" &&
+  value !== null &&
+  typeof (value as { message?: unknown }).message === "string";
 
 const View = markRaw(
   defineComponent({
@@ -181,14 +199,17 @@ const plugin: ToolPlugin = {
       return { message: "image generation isn't available" };
     }
     const key = slideKey(slide);
-    if (isDuplicate(key)) {
+    const earlier = recentRequest(key);
+    if (earlier && (await earlier.shown)) {
       // Not shown again, and no instructions: the model goes on by itself.
       return {
         message: `slide ${slide.slide} of ${slide.totalSlides} is already on the screen`,
         cancelled: true,
       };
     }
-    recentSlides.set(key, Date.now());
+    let settle: (shown: boolean) => void = () => {};
+    const shown = new Promise<boolean>((resolve) => (settle = resolve));
+    recentSlides.set(key, { at: Date.now(), shown });
     // The title leads the prompt as a slide's title, not as a bare sentence:
     // a question title first ("What is Photosynthesis?. A bright, sunny
     // day…") made Gemini return no image (finish reason NO_IMAGE) 4 times in
@@ -196,14 +217,24 @@ const plugin: ToolPlugin = {
     const prompt = slide.title
       ? `A presentation slide titled "${slide.title}". ${slide.imagePrompt}`
       : slide.imagePrompt;
-    const image: ToolResult = await context.app.generateImage(prompt);
+    let image: ToolResult;
+    try {
+      const generated: unknown = await context.app.generateImage(prompt);
+      image = isToolResult(generated)
+        ? generated
+        : { message: "image generation returned an unrecognized result" };
+    } catch (error) {
+      image = { message: `image generation failed: ${String(error)}` };
+    }
     const data = image.data as { imageData?: unknown } | undefined;
     // A failure keeps the image host's message and instructions, and may be
     // tried again.
     if (typeof data?.imageData !== "string") {
-      recentSlides.delete(key);
+      if (recentSlides.get(key)?.shown === shown) recentSlides.delete(key);
+      settle(false);
       return image;
     }
+    settle(true);
     return {
       ...image,
       message: `slide ${slide.slide} of ${slide.totalSlides} is on the screen`,

@@ -9,7 +9,11 @@
 // ends the tracking: they may have said "stop", and if they said "go on", the
 // next slide starts it again.
 import type { ToolResult } from "gui-chat-protocol/vue";
-import { PRESENT_SLIDE, parseSlideArgs } from "../tools/presentSlide";
+import {
+  PRESENT_SLIDE,
+  parseSlideArgs,
+  slideAfterUserSpokeInstructions,
+} from "../tools/presentSlide";
 
 interface UseSlideshowOptions {
   /** No reply running, no audio playing, no tool running, user silent. */
@@ -23,6 +27,9 @@ const GRACE_MS = 2000;
 export function useSlideshow(options: UseSlideshowOptions) {
   let progress: { shown: number; total: number; asked: boolean } | null = null;
   let timer: ReturnType<typeof setTimeout> | null = null;
+  // When tracking last stopped. A slide whose call started before that (the
+  // user interrupted while its picture was being made) doesn't start it again.
+  let stoppedAt = -Infinity;
 
   const cancelCheck = () => {
     if (timer) clearTimeout(timer);
@@ -31,27 +38,38 @@ export function useSlideshow(options: UseSlideshowOptions) {
 
   const stop = () => {
     progress = null;
+    stoppedAt = performance.now();
     cancelCheck();
   };
 
-  /** Every tool result; only presentSlide's matter. */
+  /** Every tool result; only presentSlide's matter. Returns instructions
+   *  that replace the result's, for a slide asked for before the user spoke:
+   *  its own say to go on, which Gemini and Grok did right after saying they
+   *  had stopped. */
   const observeToolResult = (
     name: string,
     args: Record<string, unknown>,
     result: ToolResult,
-  ) => {
+    startedAt: number,
+  ): string | undefined => {
     // A duplicate slide (see presentSlide.ts) changes nothing.
-    if (name !== PRESENT_SLIDE || result.cancelled) return;
+    if (name !== PRESENT_SLIDE || result.cancelled) return undefined;
     const slide = parseSlideArgs(args);
+    if (startedAt <= stoppedAt) {
+      return slide && result.instructions
+        ? slideAfterUserSpokeInstructions(slide)
+        : undefined;
+    }
     const shown =
       typeof (result.data as { imageData?: unknown } | undefined)?.imageData ===
       "string";
     // A slide that failed (no key, a refused prompt) would fail again.
     if (!slide || !shown || slide.slide >= slide.totalSlides) {
       stop();
-      return;
+      return undefined;
     }
     progress = { shown: slide.slide, total: slide.totalSlides, asked: false };
+    return undefined;
   };
 
   /** The model's reply or its audio ended: check whether it went on. */

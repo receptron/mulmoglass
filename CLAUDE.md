@@ -115,7 +115,7 @@ Define a shared value once. The copies that exist are debt, not precedent:
 | Follow-up instructions | `response.create` with `instructions` appended to the session's (alone, they would replace the system prompt and the user's language for that reply) | a user turn | a user message + `response.create` (its `instructions` would replace the system prompt) |
 | Overlapping replies | held until `response.done`, once (else `conversation_already_has_active_response`, seen in testing); each request is settled only by its own `event_id` / `metadata.request_id`, since the server starts responses of its own | n/a | held until `response.done`, once |
 | Captions | `response.output_audio_transcript.*` | `outputAudioTranscription` | `response.output_audio_transcript.*` |
-| Speech started/stopped | yes | **no events**, so the status never shows "Listening…" | yes |
+| Speech started/stopped | yes | no events of its own: started when the first `inputTranscription` of a turn arrives (after the user began), stopped when the model's turn starts | yes |
 | Stop during connect / stale socket close | guarded | **not guarded** (known gap, as in MulmoChat) | guarded |
 
 `sendUserText` exists only for Views (a quiz answer, a game move). The user never types.
@@ -155,8 +155,11 @@ picture per slide, with the slide number and total as arguments), each telling t
 the slide and call the next one in the same reply. The model still ended replies mid-slideshow
 (about one run in three with generateImage and "Slide N of M" prompts), so `useSlideshow` asks it
 once per slide to go on when a reply ends, nothing plays or runs, and slides are left; the user
-speaking stops that. Gemini Live sometimes called the next slide twice (once in the reply it starts
-after a tool output, once in the one the instructions start); a repeat within a minute is dropped.
+speaking stops that. A slide asked for before the user spoke gets instructions to answer them first
+instead of its own "go on" (Gemini and Grok otherwise said "I've stopped" and carried on). Gemini
+Live sometimes called the next slide twice (once in the reply it starts after a tool output, once in
+the one the instructions start); an identical call within a minute is dropped, after waiting for the
+first to be made.
 
 Gemini's image model answers some prompts with text and no image (one call in three for a prompt
 that reads like a question, such as a slide about ATP's structure) unless the request sets
