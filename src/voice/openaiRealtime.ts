@@ -18,6 +18,7 @@ interface RealtimeEvent {
   arguments?: string;
   delta?: string;
   error?: unknown;
+  response?: { metadata?: { request_id?: unknown } | null };
 }
 
 async function mintEphemeralKey(apiKey: string, model: string) {
@@ -85,38 +86,71 @@ export function useOpenAIRealtime(options: VoiceSessionOptions): VoiceSession {
   // arrives while the model is still talking. So a request in that window is
   // held and sent after response.done, once, with the held instructions
   // joined (the same approach as grokVoice.ts).
-  let responseActive = false;
-  let responseRequested = false;
+  //
+  // The server also starts responses itself (the user's spoken turn), so a
+  // response.created or an error isn't necessarily about our request. Each
+  // request carries an event_id, which an error about it echoes
+  // (error.event_id), and the same id in the response's metadata, which
+  // response.created/done echo; only those settle it. (MulmoChat #224.)
+  let responseRunning = false;
+  // Our response.create, sent and not yet settled.
+  let pendingRequest: { eventId: string; instructions?: string } | null = null;
   let heldResponse: { instructions: string[] } | null = null;
-  // The instructions of the response.create awaiting response.created.
-  let requestedInstructions: string | undefined;
+  let requestCount = 0;
   // A response.create's `instructions` replace the session's for that
   // response, which would drop the base prompt, the plugins' prompts and the
   // user's language (a slideshow's next slide came back in English, without
   // its rules). So a follow-up is sent as the session's plus its own.
   let sessionInstructions = "";
 
+  const isResponseBusy = () => responseRunning || pendingRequest !== null;
+
+  const holdResponse = (instructions?: string, first = false) => {
+    heldResponse ??= { instructions: [] };
+    if (!instructions) return;
+    if (first) heldResponse.instructions.unshift(instructions);
+    else heldResponse.instructions.push(instructions);
+  };
+
   const requestResponse = (instructions?: string): boolean => {
-    if (responseActive) {
-      heldResponse ??= { instructions: [] };
-      if (instructions) heldResponse.instructions.push(instructions);
+    if (isResponseBusy()) {
+      holdResponse(instructions);
       return true;
     }
-    responseActive = true;
-    responseRequested = true;
-    requestedInstructions = instructions;
-    return send({
+    requestCount += 1;
+    const eventId = `mulmoglass_response_${requestCount}`;
+    const sent = send({
       type: "response.create",
-      response: instructions
-        ? { instructions: `${sessionInstructions}\n\n${instructions}` }
-        : {},
+      event_id: eventId,
+      response: {
+        ...(instructions
+          ? { instructions: `${sessionInstructions}\n\n${instructions}` }
+          : {}),
+        metadata: { request_id: eventId },
+      },
     });
+    // A closed channel (a tool finishing after Stop) changes nothing, so the
+    // next session doesn't start out waiting for a response that never ran.
+    if (sent) pendingRequest = { eventId, instructions };
+    return sent;
   };
 
   const releaseHeldResponse = () => {
+    if (isResponseBusy() || !heldResponse) return;
     const held = heldResponse;
     heldResponse = null;
-    if (held) requestResponse(held.instructions.join("\n\n") || undefined);
+    requestResponse(held.instructions.join("\n\n") || undefined);
+  };
+
+  /** Whether `response` (from response.created/done) is our pending one. */
+  const settlesPendingRequest = (response: RealtimeEvent["response"]) =>
+    pendingRequest !== null &&
+    response?.metadata?.request_id === pendingRequest.eventId;
+
+  const resetResponseState = () => {
+    responseRunning = false;
+    pendingRequest = null;
+    heldResponse = null;
   };
 
   const handleMessage = async (message: MessageEvent) => {
@@ -130,24 +164,24 @@ export function useOpenAIRealtime(options: VoiceSessionOptions): VoiceSession {
     switch (event.type) {
       case "error":
         console.error("OpenAI Realtime error", event.error);
-        // A response.create that raced the server's own turn: hold it again.
-        if (
-          (event.error as { code?: unknown } | undefined)?.code ===
-          "conversation_already_has_active_response"
-        ) {
-          responseActive = true;
-          responseRequested = false;
-          heldResponse ??= { instructions: [] };
-          if (requestedInstructions) {
-            heldResponse.instructions.unshift(requestedInstructions);
+        {
+          const error = event.error as
+            { code?: unknown; event_id?: unknown } | undefined;
+          if (pendingRequest && error?.event_id === pendingRequest.eventId) {
+            const refused = pendingRequest;
+            pendingRequest = null;
+            // Our request raced a response the server started itself (the
+            // user's own turn): hold it again, ahead of later ones.
+            if (error.code === "conversation_already_has_active_response") {
+              holdResponse(refused.instructions, true);
+              releaseHeldResponse();
+              break;
+            }
+            // Refused outright: no response follows. Send what was held.
+            handlers.onError?.(event.error);
+            releaseHeldResponse();
+            break;
           }
-          requestedInstructions = undefined;
-          break;
-        }
-        // Refused outright: no response.done will follow.
-        if (responseRequested) {
-          responseRequested = false;
-          responseActive = false;
         }
         handlers.onError?.(event.error);
         break;
@@ -172,14 +206,14 @@ export function useOpenAIRealtime(options: VoiceSessionOptions): VoiceSession {
         handlers.onTranscriptDone?.();
         break;
       case "response.created":
-        responseActive = true;
-        responseRequested = false;
-        requestedInstructions = undefined;
+        responseRunning = true;
+        if (settlesPendingRequest(event.response)) pendingRequest = null;
         conversationActive.value = true;
         handlers.onConversationStarted?.();
         break;
       case "response.done":
-        responseActive = false;
+        responseRunning = false;
+        if (settlesPendingRequest(event.response)) pendingRequest = null;
         conversationActive.value = false;
         handlers.onConversationFinished?.();
         releaseHeldResponse();
@@ -235,9 +269,7 @@ export function useOpenAIRealtime(options: VoiceSessionOptions): VoiceSession {
     if (remoteAudio) remoteAudio.srcObject = null;
     processedToolCalls.clear();
     isAudioPlaying = false;
-    responseActive = false;
-    responseRequested = false;
-    heldResponse = null;
+    resetResponseState();
     chatActive.value = false;
     conversationActive.value = false;
     connecting.value = false;
@@ -252,6 +284,7 @@ export function useOpenAIRealtime(options: VoiceSessionOptions): VoiceSession {
       return;
     }
     connecting.value = true;
+    resetResponseState();
     const generation = ++startGeneration;
     const stopped = () => generation !== startGeneration;
     const model = options.getModelId();
