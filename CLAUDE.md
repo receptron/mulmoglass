@@ -162,6 +162,12 @@ Gemini's image model answers some prompts with text and no image (one call in th
 that reads like a question, such as a slide about ATP's structure) unless the request sets
 `responseModalities: ["IMAGE"]` (`src/host/imageGeneration.ts`).
 
+An image failure's reason goes to the model, which repeats it to the user, so it is one accurate
+sentence: the API's own error message with a hint by status, "refused under its content policy" for
+Gemini's refusal finish reasons, or the start of a text-only answer. The raw response made the model
+invent a reason ("the prompt was too long"). OpenAI's 401 for a wrong key carries no CORS header, so
+the browser sees a network error; that reason names both.
+
 ## Debugging
 
 Every tool call is logged to the console: `[tool] call <name> <args>`, `[tool] result <name>
