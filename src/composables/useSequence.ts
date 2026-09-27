@@ -5,6 +5,9 @@
 // is over, nothing is playing or running and steps are left, the host asks it
 // once to go on.
 //
+// A step that waits for the user (a how-to step they are doing, a story
+// choice) is not asked about: the model goes on when the user says so.
+//
 // Asked once per step: a model that still doesn't go on has a reason (it is
 // answering something else), and asking again would loop. The user speaking
 // ends the tracking: they may have said "stop", and if they said "go on", the
@@ -13,6 +16,7 @@
 import type { ToolResult } from "gui-chat-protocol/vue";
 import {
   continueInstructions,
+  noteUserSpoke,
   stepAfterUserSpokeInstructions,
   type SequenceStep,
 } from "../tools/sequence";
@@ -70,7 +74,7 @@ export function useSequence(options: UseSequenceOptions) {
     // A check set before this step arrived would ask for the step its own
     // instructions are about to ask for.
     cancelCheck();
-    progress = { step, asked: false };
+    progress = step.waitsForUser ? null : { step, asked: false };
     return undefined;
   };
 
@@ -87,5 +91,12 @@ export function useSequence(options: UseSequenceOptions) {
     }, GRACE_MS);
   };
 
-  return { observeToolResult, replyEnded, stop };
+  /** The user started speaking: they may have said "stop", or "next" to a
+   *  step that waits for them. */
+  const userSpoke = () => {
+    noteUserSpoke();
+    stop();
+  };
+
+  return { observeToolResult, replyEnded, stop, userSpoke };
 }
