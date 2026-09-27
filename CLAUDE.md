@@ -173,8 +173,9 @@ Every image service takes them: Gemini as `inlineData` parts, OpenAI on `/v1/ima
 shrunk to 768 px JPEG first. gui-chat-protocol's `generateImage` takes a prompt only, so the host adds
 `context.app.generateImageWithReferences`. A description repeated in each prompt did not keep a
 character the same; the reference sheets did, on all three. The storyboard is saved as
-`artifacts/storyboards/<id>.json` in MulmoCast's shape (characters are `imageParams.images`, a
-panel's characters a beat's `imageNames`), so it can become a MulmoScript.
+`artifacts/storyboards/<id>.json`. That file is not a MulmoScript, but it maps onto one field for
+field (a character is an entry in `imageParams.images`, a panel a beat, its characters the beat's
+`imageNames`); an export doesn't exist yet.
 
 Gemini's image model answers some prompts with text and no image (one call in three for a prompt
 that reads like a question, such as a slide about ATP's structure) unless the request sets

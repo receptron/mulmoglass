@@ -9,11 +9,12 @@
 // a description repeated in every prompt did not. Panels go on like slides
 // (./sequence.ts, src/composables/useSequence.ts).
 //
-// The shape follows MulmoCast's, so a storyboard can become a MulmoScript:
-// its characters are imageParams.images (named reference images) and a
-// panel's characters are a beat's imageNames. A storyboard is saved as
-// artifacts/storyboards/<id>.json, with its pictures' paths in
-// artifacts/images/, so it outlives the session that made it.
+// A storyboard is saved as artifacts/storyboards/<id>.json, with its
+// pictures' paths in artifacts/images/, so it outlives the session that made
+// it. The file is MulmoGlass's own, not a MulmoScript, but it maps onto one
+// field for field: each character (name and sheet) would be an entry in
+// imageParams.images, each panel a beat, and a panel's characters that beat's
+// imageNames. Nothing converts it yet.
 import { defineComponent, h, markRaw, type PropType } from "vue";
 import type { ToolResult } from "gui-chat-protocol/vue";
 import type { ToolPlugin } from "./types";
