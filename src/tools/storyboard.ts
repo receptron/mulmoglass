@@ -24,7 +24,9 @@ import {
   fittedImageView,
   imageOf,
   imagePreview,
+  generateStepImage,
   imageResult,
+  userSpokeSince,
   type SequenceStep,
 } from "./sequence";
 
@@ -47,6 +49,8 @@ interface Panel {
   characters: string[];
   imagePrompt: string;
   imagePath?: string;
+  /** In an interactive story, what the user chose between after it. */
+  choices?: string[];
 }
 
 interface Storyboard {
@@ -55,6 +59,9 @@ interface Storyboard {
   style: string;
   totalPanels: number;
   characters: Character[];
+  /** The user chooses what happens at some panels; the panels saved are the
+   *  path the story took. */
+  interactive: boolean;
   panels: Record<string, Panel>;
 }
 
@@ -142,6 +149,7 @@ interface StoryboardArgs {
   style: string;
   totalPanels: number;
   characters: Character[];
+  interactive: boolean;
 }
 
 /** The arguments, or what is wrong with them (said to the model). */
@@ -177,6 +185,7 @@ function parseStoryboardArgs(
     style: text(args.style),
     totalPanels,
     characters,
+    interactive: args.interactive === true,
   };
 }
 
@@ -284,7 +293,10 @@ interface PanelArgs {
   characters: string[];
   imagePrompt: string;
   caption: string;
+  choices: string[];
 }
+
+const MAX_CHOICES = 3;
 
 function parsePanelArgs(args: Record<string, unknown>): PanelArgs | null {
   const { panel } = args;
@@ -308,16 +320,26 @@ function parsePanelArgs(args: Record<string, unknown>): PanelArgs | null {
     characters,
     imagePrompt,
     caption: text(args.caption),
+    choices: (Array.isArray(args.choices) ? args.choices : [])
+      .map(text)
+      .filter(Boolean)
+      .slice(0, MAX_CHOICES),
   };
 }
 
-const panelShownInstructions = (
+function panelShownInstructions(
   storyboard: Storyboard,
   panel: number,
-): string =>
-  panel < storyboard.totalPanels
+  choices: string[],
+): string {
+  if (choices.length) {
+    const listed = choices.map((choice, i) => `${i + 1}. ${choice}`).join(" ");
+    return `Panel ${panel} of ${storyboard.totalPanels} is now on the screen, with the user's choices: ${listed} Tell this part of the story, then read the choices out and ask the user which one they pick, and wait for their answer. Then call presentPanel for panel ${panel + 1} with storyboardId "${storyboard.id}", going on the way they chose.`;
+  }
+  return panel < storyboard.totalPanels
     ? `Panel ${panel} of ${storyboard.totalPanels} is now on the screen. Tell this part of the story, then, in this same reply and without waiting for the user, call presentPanel for panel ${panel + 1} with storyboardId "${storyboard.id}". If the user has asked you to stop, or asked something else, since the story began, answer them instead of going on.`
     : `Panel ${panel} of ${storyboard.totalPanels}, the last one, is now on the screen. Tell this part of the story, then bring it to an end.`;
+}
 
 /** The prompt for a panel: the style, the scene, and who is who. */
 function panelPrompt(
@@ -355,10 +377,16 @@ interface PanelData {
   panel: number;
   totalPanels: number;
   caption: string;
+  choices?: string[];
 }
 
 // An identical panel asked for twice (Gemini Live) is shown once.
 const repeats = createRepeatGuard();
+
+// The panel waiting for the user's choice, by storyboard, and when it
+// appeared. Grok sometimes went on to the next panel in the reply that read
+// the choices out; the host holds such a panel back until the user speaks.
+const awaitingChoice = new Map<string, { panel: number; shownAt: number }>();
 
 async function presentPanel(
   context: Parameters<ToolPlugin["execute"]>[0],
@@ -385,6 +413,20 @@ async function presentPanel(
   const app = context.app;
   if (!app?.generateImage) {
     return { message: "image generation isn't available" };
+  }
+
+  const waiting = awaitingChoice.get(storyboard.id);
+  if (
+    waiting &&
+    parsed.panel > waiting.panel &&
+    !userSpokeSince(waiting.shownAt)
+  ) {
+    console.info(`[sequence] holding panel ${parsed.panel} for the user`);
+    // No instructions: they would start another reply.
+    return {
+      message: `panel ${parsed.panel} was not shown: the user hasn't picked a choice yet, and panel ${waiting.panel} is still on the screen. Wait for their answer.`,
+      cancelled: true,
+    };
   }
 
   const key = JSON.stringify(parsed);
@@ -414,24 +456,36 @@ async function presentPanel(
     parsed,
     cast.map(({ character, sheet }) => ({ character, hasSheet: !!sheet })),
   );
-  const withReferences = app.generateImageWithReferences;
-  const image = await imageResult(() =>
-    references.length && withReferences
-      ? withReferences(prompt, references)
-      : app.generateImage(prompt),
-  );
+  const image = await generateStepImage(app, prompt, references);
   const { imageData, imagePath } = imageOf(image);
   settle(!!imageData);
   // A failure keeps the image host's message and instructions.
   if (!imageData) return image;
+
+  // Choices make the story interactive, whether or not defineStoryboard
+  // said so (Gemini Live gave choices without it); none on the last panel.
+  const choices =
+    parsed.panel < storyboard.totalPanels && parsed.choices.length >= 2
+      ? parsed.choices
+      : [];
+  if (choices.length) storyboard.interactive = true;
 
   storyboard.panels[String(parsed.panel)] = {
     caption: parsed.caption,
     characters: cast.map(({ character }) => character.name),
     imagePrompt: parsed.imagePrompt,
     ...(imagePath && { imagePath }),
+    ...(choices.length && { choices }),
   };
   await saveStoryboard(storyboard);
+  if (choices.length) {
+    awaitingChoice.set(storyboard.id, {
+      panel: parsed.panel,
+      shownAt: performance.now(),
+    });
+  } else {
+    awaitingChoice.delete(storyboard.id);
+  }
 
   const data: PanelData = {
     imageData,
@@ -441,6 +495,7 @@ async function presentPanel(
     panel: parsed.panel,
     totalPanels: storyboard.totalPanels,
     caption: parsed.caption,
+    ...(choices.length && { choices }),
   };
   return {
     ...image,
@@ -455,7 +510,7 @@ async function presentPanel(
     ]
       .filter(Boolean)
       .join("; "),
-    instructions: panelShownInstructions(storyboard, parsed.panel),
+    instructions: panelShownInstructions(storyboard, parsed.panel, choices),
   };
 }
 
@@ -493,6 +548,8 @@ export function storyboardSequenceStep(
       label: `Panel ${panel} of ${total}`,
       onShown: "tell that part of the story",
       nextCall: `call presentPanel for panel ${panel + 1} of ${total} with storyboardId "${id}"`,
+      // A panel with choices waits for the user's pick.
+      waitsForUser: Array.isArray(data.choices) && data.choices.length > 0,
     };
   }
   return null;
@@ -548,7 +605,7 @@ const CastView = markRaw(
 );
 
 const PROMPT =
-  "When the user asks for a story, a picture book, a comic or a storyboard, tell it in pictures: first call defineStoryboard with the art style and the characters who appear more than once (it draws a reference sheet for each, so they look the same in every panel), then show the panels one at a time with presentPanel, naming the characters in each, and tell each part of the story when its panel appears. Go on to the last panel without asking whether to continue. Use presentSlide to explain a topic, not to tell a story.";
+  "When the user asks for a story, a picture book, a comic or a storyboard, tell it in pictures: first call defineStoryboard with the art style and the characters who appear more than once (it draws a reference sheet for each, so they look the same in every panel), then show the panels one at a time with presentPanel, naming the characters in each, and tell each part of the story when its panel appears. Go on to the last panel without asking whether to continue, unless the story is interactive. When the user wants to decide what happens (an adventure, a story for a child who wants to choose), set interactive, and give two or three choices on two or three of the panels: the story waits there for the user's pick and goes on their way; it still ends at the last panel whichever way it goes. Use presentSlide to explain a topic, not to tell a story.";
 
 const defineStoryboardPlugin: ToolPlugin = {
   toolDefinition: {
@@ -568,6 +625,11 @@ const defineStoryboardPlugin: ToolPlugin = {
         totalPanels: {
           type: "integer",
           description: `How many panels the story has, at most ${MAX_PANELS}; four to eight is usual.`,
+        },
+        interactive: {
+          type: "boolean",
+          description:
+            "The user chooses what happens: panels can offer choices, and the story waits for the pick.",
         },
         characters: {
           type: "array",
@@ -633,15 +695,24 @@ const presentPanelPlugin: ToolPlugin = {
           type: "string",
           description: "One short line shown under the picture.",
         },
+        choices: {
+          type: "array",
+          items: { type: "string" },
+          description:
+            "Only in an interactive story, and not on the last panel: two or three short options for what happens next. The story waits for the user's pick.",
+        },
       },
       required: ["storyboardId", "panel", "characters", "imagePrompt"],
     },
   },
   generatingMessage: "Drawing the panel...",
   isEnabled: () => true,
-  viewComponent: fittedImageView("PresentPanelView", (data) =>
-    typeof data.caption === "string" ? data.caption : "",
-  ),
+  viewComponent: fittedImageView("PresentPanelView", (data) => ({
+    caption: typeof data.caption === "string" ? data.caption : "",
+    choices: Array.isArray(data.choices)
+      ? data.choices.filter((c): c is string => typeof c === "string")
+      : [],
+  })),
   previewComponent: imagePreview("PresentPanelPreview"),
   execute: (context, args) =>
     presentPanel(context, args as Record<string, unknown>),

@@ -289,7 +289,7 @@ session.registerEventHandlers({
   onToolCall: (msg, __id, argStr) => handleToolCall(msg, argStr),
   onSpeechStarted: () => {
     userSpeaking.value = true;
-    sequence.stop();
+    sequence.userSpoke();
   },
   onConversationFinished: () => sequence.replyEnded(),
   onSpeechStopped: () => (userSpeaking.value = false),

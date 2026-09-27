@@ -177,6 +177,18 @@ character the same; the reference sheets did, on all three. The storyboard is sa
 field (a character is an entry in `imageParams.images`, a panel a beat, its characters the beat's
 `imageNames`); an export doesn't exist yet.
 
+Some steps wait for the user instead of going on: a step of a step-by-step guide (`presentSlide` with
+mode `"steps"`) and a storyboard panel that offers choices (an interactive story). Their
+`SequenceStep` says `waitsForUser`, so `useSequence` doesn't ask the model to go on. The instructions
+alone were not enough: Gemini Live went on to the next step in the reply that explained the current
+one, and Grok to the next panel in the reply that read the choices out. So the tool itself refuses a
+step past a waiting one until the user has spoken since it appeared (`userSpokeSince`, fed by
+`onSpeechStarted`), and returns that as a cancelled result without instructions. In testing, every
+real "next" and every spoken choice got through on all three voices. A guide keeps its steps: "go
+back" re-shows the step as it was, without drawing it again, and each new step is drawn with the
+previous one as its reference image. Choices make a storyboard interactive even when
+`defineStoryboard` didn't say so (Gemini gave choices without the flag).
+
 Gemini's image model answers some prompts with text and no image (one call in three for a prompt
 that reads like a question, such as a slide about ATP's structure) unless the request sets
 `responseModalities: ["IMAGE"]` (`src/host/imageGeneration.ts`). Even then, a prompt that opens with a

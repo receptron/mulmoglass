@@ -3,7 +3,7 @@
 // generated picture, which the host keeps going (src/composables/useSequence.ts). The tools that are
 // sequences are listed in ./sequences.ts.
 import { defineComponent, h, markRaw, type PropType } from "vue";
-import type { ToolResult } from "gui-chat-protocol/vue";
+import type { ToolContextApp, ToolResult } from "gui-chat-protocol/vue";
 import {
   ImagePreview,
   type ImageToolData,
@@ -23,7 +23,21 @@ export interface SequenceStep {
   onShown: string;
   /** The call for the next step: `call presentSlide for slide 3 of 5`. */
   nextCall: string;
+  /** The next step waits for the user (a how-to step they are doing, a
+   *  story choice), so the host doesn't ask the model to go on. */
+  waitsForUser?: boolean;
 }
+
+// When the user last spoke (performance.now()), told by the host
+// (src/composables/useSequence.ts). A step that waits for the user isn't
+// passed until they have spoken since it appeared.
+let lastUserSpeech = -Infinity;
+
+export const noteUserSpoke = (): void => {
+  lastUserSpeech = performance.now();
+};
+
+export const userSpokeSince = (time: number): boolean => lastUserSpeech > time;
 
 /** For a step that arrived after the user spoke (asked while they did). */
 export const stepAfterUserSpokeInstructions = ({
@@ -58,6 +72,25 @@ export async function imageResult(
   } catch (error) {
     return { message: `image generation failed: ${String(error)}` };
   }
+}
+
+/** A picture from the image host, following `references` (data URLs) when
+ *  there are any: context.app.generateImageWithReferences, MulmoGlass's
+ *  extension (src/host/pluginHost.ts), or the prompt alone without it. */
+export function generateStepImage(
+  app: ToolContextApp,
+  prompt: string,
+  references: string[],
+): Promise<ToolResult> {
+  const generate = app.generateImage;
+  const withReferences = app.generateImageWithReferences;
+  return imageResult(() => {
+    if (references.length && withReferences) {
+      return withReferences(prompt, references);
+    }
+    if (!generate) throw new Error("image generation isn't available");
+    return generate(prompt);
+  });
 }
 
 /** The picture a result carries, and where it was saved. */
@@ -110,14 +143,52 @@ export function createRepeatGuard() {
   return { alreadyShown, begin };
 }
 
+/** What a View shows under the picture. */
+export interface ImageFooter {
+  caption?: string;
+  /** A story's choices, numbered, for the user to pick by voice. */
+  choices?: string[];
+}
+
+function footer({ caption, choices }: ImageFooter) {
+  const children = [];
+  if (caption) {
+    children.push(
+      h("p", { class: "text-center text-lg text-gray-800 px-4" }, caption),
+    );
+  }
+  if (choices?.length) {
+    children.push(
+      h(
+        "ol",
+        { class: "flex flex-wrap justify-center gap-3 px-4" },
+        choices.map((choice, i) =>
+          h(
+            "li",
+            {
+              class:
+                "rounded-full bg-indigo-600 text-white text-xl px-5 py-2 font-medium",
+            },
+            `${i + 1}. ${choice}`,
+          ),
+        ),
+      ),
+    );
+  }
+  return children.length
+    ? h("div", { class: "flex flex-col gap-2 pb-2" }, children)
+    : null;
+}
+
 /**
  * A View that fits the whole picture on the screen, as a slide or a panel
  * should be seen (ui-image's ImageView, which generateImage's View uses, fits
- * a wide picture to the width and scrolls), with an optional caption under it.
+ * a wide picture to the width and scrolls), with a caption and choices under
+ * it when the result has them.
  */
 export function fittedImageView(
   name: string,
-  captionOf: (data: Record<string, unknown>) => string = () => "",
+  footerOf: (data: Record<string, unknown>) => ImageFooter = () => ({}),
 ) {
   return markRaw(
     defineComponent({
@@ -132,7 +203,6 @@ export function fittedImageView(
         return () => {
           const data = props.selectedResult.data;
           if (!data?.imageData) return h("div", { class: "h-full bg-white" });
-          const caption = captionOf(data as unknown as Record<string, unknown>);
           return h(
             "div",
             { class: "h-full w-full flex flex-col bg-white p-2 gap-2" },
@@ -150,13 +220,7 @@ export function fittedImageView(
                   }),
                 ],
               ),
-              caption
-                ? h(
-                    "p",
-                    { class: "text-center text-lg text-gray-800 px-4 pb-2" },
-                    caption,
-                  )
-                : null,
+              footer(footerOf(data as unknown as Record<string, unknown>)),
             ],
           );
         };
