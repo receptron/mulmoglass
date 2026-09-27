@@ -183,9 +183,11 @@ mode `"steps"`) and a storyboard panel that offers choices (an interactive story
 alone were not enough: Gemini Live went on to the next step in the reply that explained the current
 one, and Grok to the next panel in the reply that read the choices out. So the tool itself refuses a
 step past a waiting one until the user has spoken since it appeared (`userSpokeSince`, fed by
-`onSpeechStarted`), and returns that as a cancelled result without instructions. In testing, every
+`onSpeechStarted`), and returns that as a cancelled result without instructions. A step being drawn
+counts as waiting (`shownAt` is Infinity until it appears), or a call that overlapped it would pass. In testing, every
 real "next" and every spoken choice got through on all three voices. A guide keeps its steps: "go
-back" re-shows the step as it was, without drawing it again, and each new step is drawn with the
+back" re-shows the step as it was, without drawing it again (unless it is the result selected on
+the screen, which another tool's result may have replaced), and each new step is drawn with the
 previous one as its reference image. Choices make a storyboard interactive even when
 `defineStoryboard` didn't say so (Gemini gave choices without the flag).
 

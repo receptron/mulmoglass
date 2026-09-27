@@ -386,6 +386,8 @@ const repeats = createRepeatGuard();
 // The panel waiting for the user's choice, by storyboard, and when it
 // appeared. Grok sometimes went on to the next panel in the reply that read
 // the choices out; the host holds such a panel back until the user speaks.
+// A panel being drawn is here too, with shownAt Infinity: its choices aren't
+// known yet, so a later panel waits for it.
 const awaitingChoice = new Map<string, { panel: number; shownAt: number }>();
 
 async function presentPanel(
@@ -424,7 +426,10 @@ async function presentPanel(
     console.info(`[sequence] holding panel ${parsed.panel} for the user`);
     // No instructions: they would start another reply.
     return {
-      message: `panel ${parsed.panel} was not shown: the user hasn't picked a choice yet, and panel ${waiting.panel} is still on the screen. Wait for their answer.`,
+      message:
+        waiting.shownAt === Infinity
+          ? `panel ${parsed.panel} was not shown: panel ${waiting.panel} is still being drawn. Wait for it before going on.`
+          : `panel ${parsed.panel} was not shown: the user hasn't picked a choice yet, and panel ${waiting.panel} is still on the screen. Wait for their answer.`,
       cancelled: true,
     };
   }
@@ -438,6 +443,11 @@ async function presentPanel(
     };
   }
   const settle = repeats.begin(key);
+  const pending = { panel: parsed.panel, shownAt: Infinity };
+  const before = awaitingChoice.get(storyboard.id);
+  awaitingChoice.set(storyboard.id, pending);
+  // Whether this panel is still the latest one asked for.
+  const latest = () => awaitingChoice.get(storyboard.id) === pending;
 
   const unknown: string[] = [];
   const cast: { character: Character; sheet: string | null }[] = [];
@@ -459,8 +469,15 @@ async function presentPanel(
   const image = await generateStepImage(app, prompt, references);
   const { imageData, imagePath } = imageOf(image);
   settle(!!imageData);
-  // A failure keeps the image host's message and instructions.
-  if (!imageData) return image;
+  if (!imageData) {
+    // The panel before it is still the one waiting, if one was.
+    if (latest()) {
+      if (before) awaitingChoice.set(storyboard.id, before);
+      else awaitingChoice.delete(storyboard.id);
+    }
+    // A failure keeps the image host's message and instructions.
+    return image;
+  }
 
   // Choices make the story interactive, whether or not defineStoryboard
   // said so (Gemini Live gave choices without it); none on the last panel.
@@ -478,13 +495,15 @@ async function presentPanel(
     ...(choices.length && { choices }),
   };
   await saveStoryboard(storyboard);
-  if (choices.length) {
-    awaitingChoice.set(storyboard.id, {
-      panel: parsed.panel,
-      shownAt: performance.now(),
-    });
-  } else {
-    awaitingChoice.delete(storyboard.id);
+  if (latest()) {
+    if (choices.length) {
+      awaitingChoice.set(storyboard.id, {
+        panel: parsed.panel,
+        shownAt: performance.now(),
+      });
+    } else {
+      awaitingChoice.delete(storyboard.id);
+    }
   }
 
   const data: PanelData = {
