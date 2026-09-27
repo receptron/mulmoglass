@@ -28,7 +28,9 @@ interface UseSequenceOptions {
   sendInstructions: (instructions: string) => boolean;
 }
 
-// After a reply ends, how long to wait for the model to go on by itself.
+// After a reply ends, how long to wait for the model to go on by itself;
+// while the host is busy (a tool running, audio playing), how often to look
+// again.
 const GRACE_MS = 2000;
 
 export function useSequence(options: UseSequenceOptions) {
@@ -84,7 +86,14 @@ export function useSequence(options: UseSequenceOptions) {
     cancelCheck();
     timer = setTimeout(() => {
       timer = null;
-      if (!progress || progress.asked || !options.isIdle()) return;
+      if (!progress || progress.asked) return;
+      // A reply can end while a tool it called is still running, and no other
+      // event may follow: look again later rather than give up. (Found in
+      // MulmoChat's review, #229.)
+      if (!options.isIdle()) {
+        replyEnded();
+        return;
+      }
       progress.asked = true;
       console.info(`[sequence] asking to ${progress.step.nextCall}`);
       options.sendInstructions(continueInstructions(progress.step));

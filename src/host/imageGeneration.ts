@@ -4,7 +4,7 @@
 // (server/plugins/appContext.ts), so generateImage's View renders it.
 import type { ToolResult } from "gui-chat-protocol";
 import { IMAGE_MODELS, type ImageBackend } from "../config/models";
-import { artifactsFileOps } from "./workspace";
+import { loadSourceImages, saveImage, type SourceImage } from "./imageStore";
 
 export interface ImageSettings {
   backend: ImageBackend;
@@ -268,45 +268,33 @@ async function xaiImage(
   return `data:${image.mime_type || "image/jpeg"};base64,${image.b64_json}`;
 }
 
-// Every generated image is saved as artifacts/images/<YYYY>/<MM>/<id>.<ext>,
-// as MulmoClaude does (server/utils/files/image-store.ts), and its path goes
-// to the model in the result, so a later tool call can refer to it. The
-// result keeps the data URL too: MulmoGlass has no server to turn a path into
-// a picture, so the Views show the data URL.
-const IMAGES_DIR = "images";
-
-/** Save a data URL; returns its workspace path, or null when it can't be. */
-async function saveImage(dataUrl: string): Promise<string | null> {
-  const match = /^data:([^;,]+);base64,(.*)$/.exec(dataUrl);
-  const ext = match ? EXTENSIONS[match[1]] : undefined;
-  if (!match || !ext) return null;
-  const now = new Date();
-  const month = String(now.getUTCMonth() + 1).padStart(2, "0");
-  const id = crypto.randomUUID().replaceAll("-", "").slice(0, 12);
-  const rel = `${IMAGES_DIR}/${now.getUTCFullYear()}/${month}/${id}.${ext}`;
-  try {
-    const bytes = Uint8Array.from(atob(match[2]), (c) => c.charCodeAt(0));
-    await artifactsFileOps.write(rel, bytes);
-    return `artifacts/${rel}`;
-  } catch (error) {
-    // Out of storage, say: the picture still shows, just without a path.
-    console.warn("[image] could not save the image", error);
-    return null;
-  }
-}
-
 // A reference image is sent at most this many pixels on its longer side, as
 // a JPEG: a character sheet is 0.7–1 MB as generated, and a panel with three
 // characters sent them all, over the glasses' connection.
 const REFERENCE_MAX_SIDE = 768;
 const REFERENCE_QUALITY = 0.85;
 
-/** A data URL as a reference image, made smaller when it can be. */
-async function referenceImage(dataUrl: string): Promise<ReferenceImage> {
-  const match = /^data:([^;,]+);base64,(.*)$/.exec(dataUrl);
-  if (!match) throw new Error("a reference image isn't a data URL");
+const toBase64 = (bytes: Uint8Array): string => {
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary);
+};
+
+/** A base64 data URL's bytes (every image API answers in base64). */
+const bytesOf = (dataUrl: string): Uint8Array =>
+  Uint8Array.from(atob(dataUrl.slice(dataUrl.indexOf(",") + 1)), (c) =>
+    c.charCodeAt(0),
+  );
+
+/** A saved image as a reference image, made smaller when it can be. */
+async function referenceImage({
+  mimeType,
+  bytes,
+}: SourceImage): Promise<ReferenceImage> {
   try {
-    const bitmap = await createImageBitmap(await (await fetch(dataUrl)).blob());
+    const bitmap = await createImageBitmap(
+      new Blob([new Uint8Array(bytes)], { type: mimeType }),
+    );
     const scale = Math.min(
       1,
       REFERENCE_MAX_SIDE / Math.max(bitmap.width, bitmap.height),
@@ -323,38 +311,46 @@ async function referenceImage(dataUrl: string): Promise<ReferenceImage> {
       type: "image/jpeg",
       quality: REFERENCE_QUALITY,
     });
-    const bytes = new Uint8Array(await blob.arrayBuffer());
-    let binary = "";
-    for (const byte of bytes) binary += String.fromCharCode(byte);
-    return { mimeType: "image/jpeg", base64: btoa(binary) };
+    return {
+      mimeType: "image/jpeg",
+      base64: toBase64(new Uint8Array(await blob.arrayBuffer())),
+    };
   } catch {
     // Sent as it is.
-    return { mimeType: match[1], base64: match[2] };
+    return { mimeType, base64: toBase64(bytes) };
   }
 }
 
 /** gui-chat-protocol's ToolContext.app.generateImage: (prompt) → ToolResult.
- *  `referenceImages` (data URLs) are pictures the new one should follow, such
- *  as a storyboard's character sheets; every image service takes them. */
+ *  `sourceImages` are saved pictures the new one should follow, such as a
+ *  storyboard's character sheets; every image service takes them.
+ *
+ *  Every generated image is saved (./imageStore.ts) and its path goes to the
+ *  model in the result, so a later tool call can refer to it. The result keeps
+ *  the data URL too: MulmoGlass has no server to turn a path into a picture,
+ *  so the Views show the data URL. */
 export async function generateImage(
   prompt: string,
   settings: ImageSettings,
-  referenceImages: readonly string[] = [],
+  sourceImages: readonly SourceImage[] = [],
 ): Promise<ToolResult> {
   try {
-    const references = await Promise.all(referenceImages.map(referenceImage));
+    const references = await Promise.all(sourceImages.map(referenceImage));
     const imageData =
       settings.backend === "openai"
         ? await openaiImage(prompt, settings.openaiKey, references)
         : settings.backend === "xai"
           ? await xaiImage(prompt, settings.xaiKey, references)
           : await geminiImage(prompt, settings.geminiKey, references);
-    const imagePath = await saveImage(imageData);
+    const imagePath = await saveImage(bytesOf(imageData));
+    // As in MulmoChat: the model is told when there is no path, so it doesn't
+    // look for one.
+    const savedTo = imagePath
+      ? `; saved to ${imagePath}`
+      : "; it could not be saved, so it has no path";
     return {
       data: { imageData, prompt, ...(imagePath ? { imagePath } : {}) },
-      message: imagePath
-        ? `image generation succeeded; saved to ${imagePath}`
-        : "image generation succeeded",
+      message: `image generation succeeded${savedTo}`,
       instructions:
         "Acknowledge that the image was generated and has been already presented to the user.",
     };
@@ -367,4 +363,33 @@ export async function generateImage(
         "Tell the user briefly that the image couldn't be made and why, using the reason in the result. Don't guess at another reason.",
     };
   }
+}
+
+/**
+ * context.app.editImages: (prompt, imagePaths) → ToolResult. A new image from
+ * saved images (artifacts/images/…, at most 8) and a prompt: one image to
+ * restyle, or references such as character sheets to draw with. The same
+ * arguments and refusals as MulmoChat's (server/plugins/appContext.ts) and
+ * MulmoClaude's editImages.
+ */
+export async function editImages(
+  prompt: unknown,
+  imagePaths: unknown,
+  settings: ImageSettings,
+): Promise<ToolResult> {
+  if (typeof prompt !== "string" || !prompt.trim()) {
+    return { message: "image edit failed: prompt is required" };
+  }
+  let sources: SourceImage[];
+  try {
+    sources = await loadSourceImages(imagePaths);
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    return {
+      message: `image edit failed: ${reason}`,
+      instructions:
+        "Acknowledge that the image edit failed and briefly tell the user the reason.",
+    };
+  }
+  return generateImage(prompt, settings, sources);
 }

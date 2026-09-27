@@ -2,12 +2,13 @@
 // (src/composables/useSequence.ts), and where each result leaves it.
 import type { ToolResult } from "gui-chat-protocol/vue";
 import type { SequenceStep } from "./sequence";
-import { PRESENT_SLIDE, slideSequenceStep } from "./presentSlide";
+import { slideSequenceStep } from "./presentSlide";
+import { storyboardSequenceStep } from "./storyboard";
 import {
   DEFINE_STORYBOARD,
   PRESENT_PANEL,
-  storyboardSequenceStep,
-} from "./storyboard";
+  PRESENT_SLIDE,
+} from "./sequenceTools";
 
 const SEQUENCES: Readonly<
   Record<
@@ -21,7 +22,8 @@ const SEQUENCES: Readonly<
   [PRESENT_PANEL]: (_, result) => storyboardSequenceStep(PRESENT_PANEL, result),
 };
 
-export const isSequenceTool = (name: string): boolean => name in SEQUENCES;
+export const isSequenceTool = (name: string): boolean =>
+  Object.prototype.hasOwnProperty.call(SEQUENCES, name);
 
 /** Where the sequence is after this result: null when the tool's arguments
  *  were wrong or its picture wasn't made. */
@@ -29,4 +31,5 @@ export const sequenceStepOf = (
   name: string,
   args: Record<string, unknown>,
   result: ToolResult,
-): SequenceStep | null => SEQUENCES[name]?.(args, result) ?? null;
+): SequenceStep | null =>
+  isSequenceTool(name) ? SEQUENCES[name](args, result) : null;

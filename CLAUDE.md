@@ -170,12 +170,22 @@ throughout: `defineStoryboard` draws a reference sheet per character, in paralle
 cast; `presentPanel` draws each panel with the sheets of the characters in it as reference images.
 Every image service takes them: Gemini as `inlineData` parts, OpenAI on `/v1/images/edits` (multipart
 `image[]`), xAI on `/v1/images/edits` as an `images` list (a single `image` takes one). They are
-shrunk to 768 px JPEG first. gui-chat-protocol's `generateImage` takes a prompt only, so the host adds
-`context.app.generateImageWithReferences`. A description repeated in each prompt did not keep a
-character the same; the reference sheets did, on all three. The storyboard is saved as
-`artifacts/storyboards/<id>.json`. That file is not a MulmoScript, but it maps onto one field for
-field (a character is an entry in `imageParams.images`, a panel a beat, its characters the beat's
-`imageNames`); an export doesn't exist yet.
+shrunk to 768 px JPEG first. A description repeated in each prompt did not keep a character the same;
+the reference sheets did, on all three.
+
+**The sequence tools are shared with MulmoChat** (`../chat`), which ported them and gave them a
+server; this app now has the same layout, so a fix goes into both. `src/tools/sequenceTools.ts` is a
+copy of MulmoChat's `server/plugins/sequenceTools.ts` (definitions, prompts, argument checks,
+instructions, saved shapes; without makeMovie), `src/host/sequenceHost.ts` a port of its
+`server/plugins/sequenceHost.ts` (drawing and records), and `src/tools/presentSlide.ts`,
+`storyboard.ts`, `sequence.ts`, `sequences.ts` match its `src/tools/` files, with a call to the host
+where MulmoChat posts to its server. Until the tools move into a package, change the two together.
+References are saved pictures, by path: the host loads them from OPFS (`src/host/imageStore.ts`,
+MulmoChat's refusals and limits), and `context.app.editImages(prompt, imagePaths)` offers the same
+to plugins, as in MulmoChat and MulmoClaude. Slideshows are saved as
+`artifacts/slideshows/<id>.json` and storyboards as `artifacts/storyboards/<id>.json`, and the
+result names the ID, the same files MulmoChat's `makeMovie` makes a movie from (a story made here
+could become one there, once the files can move between the two).
 
 Some steps wait for the user instead of going on: a step of a step-by-step guide (`presentSlide` with
 mode `"steps"`) and a storyboard panel that offers choices (an interactive story). Their
