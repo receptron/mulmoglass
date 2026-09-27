@@ -136,7 +136,8 @@ let guide: {
   steps: Map<number, ToolResult>;
   /** The step on the screen, or being made. */
   current: number;
-  /** When the current step appeared. */
+  /** When the current step appeared; Infinity while it is being drawn, so
+   *  no later step passes until it has appeared and the user has spoken. */
   shownAt: number;
 } | null = null;
 
@@ -244,16 +245,25 @@ const plugin: ToolPlugin = {
       !userSpokeSince(steps.shownAt)
     ) {
       console.info(`[sequence] holding step ${slide.slide} for the user`);
+      const state =
+        steps.shownAt === Infinity
+          ? "is still being drawn"
+          : "is still on the screen";
       return {
         // No instructions: they would start another reply, and the status
         // says what to do.
-        message: `step ${slide.slide} was not shown: the user hasn't said they're ready yet, and step ${steps.current} is still on the screen. Wait for them before calling presentSlide for step ${slide.slide}.`,
+        message: `step ${slide.slide} was not shown: the user hasn't said they're ready yet, and step ${steps.current} ${state}. Wait for them before calling presentSlide for step ${slide.slide}.`,
         cancelled: true,
       };
     }
     const earlier = steps?.steps.get(slide.slide);
     if (steps && earlier) {
-      if (steps.current === slide.slide) {
+      // What is on the screen, not the guide's last step: another tool's
+      // result may have replaced it since.
+      const current = context.currentResult;
+      const onScreen =
+        !!current && imageOf(current).imageData === imageOf(earlier).imageData;
+      if (onScreen) {
         // It is on the screen; the model explains it again by itself.
         return {
           message: `step ${slide.slide} of ${slide.totalSlides} is already on the screen`,
@@ -279,7 +289,12 @@ const plugin: ToolPlugin = {
       };
     }
     const settle = repeats.begin(key);
-    if (steps) steps.current = slide.slide;
+    // Pending while it is drawn: a later step asked for meanwhile is held.
+    const before = steps && { current: steps.current, shownAt: steps.shownAt };
+    if (steps) {
+      steps.current = slide.slide;
+      steps.shownAt = Infinity;
+    }
     const { prompt, references } = slideImageRequest(
       slide,
       steps?.steps.get(slide.slide - 1),
@@ -289,9 +304,17 @@ const plugin: ToolPlugin = {
     // A failure keeps the image host's message and instructions, and may be
     // tried again.
     settle(!!imageData);
-    if (!imageData) return image;
+    if (!imageData) {
+      // The step before it is still the one on the screen.
+      if (steps && before && steps.current === slide.slide) {
+        steps.current = before.current;
+        steps.shownAt = before.shownAt;
+      }
+      return image;
+    }
     if (steps) {
       steps.steps.set(slide.slide, image);
+      steps.current = slide.slide;
       steps.shownAt = performance.now();
     }
     // The image host saved the picture (artifacts/images/…); say where.
