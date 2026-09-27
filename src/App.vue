@@ -162,7 +162,7 @@ import {
   useSettings,
 } from "./composables/useSettings";
 import { useToolResults } from "./composables/useToolResults";
-import { useSlideshow } from "./composables/useSlideshow";
+import { useSequence } from "./composables/useSequence";
 import { useVoiceSession } from "./voice/useVoiceSession";
 import {
   getToolPlugin,
@@ -240,11 +240,11 @@ const {
   sendInstructions,
   isConnected,
   onResult: (name, args, result, startedAt) =>
-    slideshow.observeToolResult(name, args, result, startedAt),
+    sequence.observeToolResult(name, args, result, startedAt),
 });
 
-// Asks the model to go on when it ends a reply mid-slideshow.
-const slideshow = useSlideshow({
+// Asks the model to go on when it ends a reply mid-sequence.
+const sequence = useSequence({
   isIdle: () =>
     chatActive.value &&
     !conversationActive.value &&
@@ -289,14 +289,14 @@ session.registerEventHandlers({
   onToolCall: (msg, __id, argStr) => handleToolCall(msg, argStr),
   onSpeechStarted: () => {
     userSpeaking.value = true;
-    slideshow.stop();
+    sequence.stop();
   },
-  onConversationFinished: () => slideshow.replyEnded(),
+  onConversationFinished: () => sequence.replyEnded(),
   onSpeechStopped: () => (userSpeaking.value = false),
   onAudioPlaybackStarted: () => (isAudioPlaying.value = true),
   onAudioPlaybackStopped: () => {
     isAudioPlaying.value = false;
-    slideshow.replyEnded();
+    sequence.replyEnded();
   },
   onTranscriptDelta: (delta) => {
     // A new reply replaces the previous caption.
@@ -340,7 +340,7 @@ function setMute(muted: boolean) {
 async function toggleChat() {
   errorMessage.value = "";
   if (chatActive.value || connecting.value) {
-    slideshow.stop();
+    sequence.stop();
     session.stopChat();
     return;
   }

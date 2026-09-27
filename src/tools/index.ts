@@ -19,6 +19,7 @@ import FormPlugin from "@mulmoclaude/form-plugin/vue";
 import SpreadsheetPlugin from "@gui-chat-plugin/spreadsheet/vue";
 import MindMapPlugin from "@gui-chat-plugin/mindmap/vue";
 import { PresentSlidePlugin } from "./presentSlide";
+import { DefineStoryboardPlugin, PresentPanelPlugin } from "./storyboard";
 import WeatherPlugin from "@gui-chat-plugin/weather/vue";
 
 import type { ToolPlugin } from "./types";
@@ -68,6 +69,9 @@ const registeredPlugins: { plugin: ToolPlugin }[] = [
   },
   // Slideshows: one generated picture per slide (./presentSlide.ts).
   PresentSlidePlugin,
+  // Stories in pictures, with characters kept the same (./storyboard.ts).
+  DefineStoryboardPlugin,
+  PresentPanelPlugin,
   {
     plugin: { ...MarkdownPlugin.plugin, systemPrompt: PRESENT_DOCUMENT_PROMPT },
   },
