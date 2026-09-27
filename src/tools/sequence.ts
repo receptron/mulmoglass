@@ -1,9 +1,10 @@
 // What slideshows (presentSlide) and storyboards (defineStoryboard,
-// presentPanel) share: numbered steps the model shows one at a time, each a
-// generated picture, which the host keeps going (src/composables/useSequence.ts). The tools that are
-// sequences are listed in ./sequences.ts.
+// presentPanel) share in the browser: numbered steps the model shows one at a
+// time, each a picture ../host/sequenceHost.ts draws, which the host keeps
+// going (src/composables/useSequence.ts). The tools that are sequences are
+// listed in ./sequences.ts. MulmoChat has the same file.
 import { defineComponent, h, markRaw, type PropType } from "vue";
-import type { ToolContextApp, ToolResult } from "gui-chat-protocol/vue";
+import type { ToolResult } from "gui-chat-protocol/vue";
 import {
   ImagePreview,
   type ImageToolData,
@@ -15,7 +16,7 @@ export interface SequenceStep {
   /** 0 for a storyboard's cast, which comes before its first panel. */
   step: number;
   total: number;
-  /** "slideshow" or "story", for what the host says to the model. */
+  /** "slideshow", "guide" or "story", for what the host says to the model. */
   kind: string;
   /** What is on the screen: "Slide 2 of 5". */
   label: string;
@@ -28,8 +29,8 @@ export interface SequenceStep {
   waitsForUser?: boolean;
 }
 
-// When the user last spoke (performance.now()), told by the host
-// (src/composables/useSequence.ts). A step that waits for the user isn't
+// When the user last spoke or sent a message (performance.now()), told by the
+// host (src/composables/useSequence.ts). A step that waits for the user isn't
 // passed until they have spoken since it appeared.
 let lastUserSpeech = -Infinity;
 
@@ -53,45 +54,6 @@ export const continueInstructions = ({
   onShown,
 }: SequenceStep) =>
   `Continue the ${kind}: ${nextCall} now, and ${onShown} when it appears. If the user has just asked you to stop or asked something else, answer them instead.`;
-
-// context.app.generateImage is typed as returning unknown.
-export const isToolResult = (value: unknown): value is ToolResult =>
-  typeof value === "object" &&
-  value !== null &&
-  typeof (value as { message?: unknown }).message === "string";
-
-/** A generated image's result, whatever the image host returned. */
-export async function imageResult(
-  generate: () => unknown,
-): Promise<ToolResult> {
-  try {
-    const generated = await generate();
-    return isToolResult(generated)
-      ? generated
-      : { message: "image generation returned an unrecognized result" };
-  } catch (error) {
-    return { message: `image generation failed: ${String(error)}` };
-  }
-}
-
-/** A picture from the image host, following `references` (data URLs) when
- *  there are any: context.app.generateImageWithReferences, MulmoGlass's
- *  extension (src/host/pluginHost.ts), or the prompt alone without it. */
-export function generateStepImage(
-  app: ToolContextApp,
-  prompt: string,
-  references: string[],
-): Promise<ToolResult> {
-  const generate = app.generateImage;
-  const withReferences = app.generateImageWithReferences;
-  return imageResult(() => {
-    if (references.length && withReferences) {
-      return withReferences(prompt, references);
-    }
-    if (!generate) throw new Error("image generation isn't available");
-    return generate(prompt);
-  });
-}
 
 /** The picture a result carries, and where it was saved. */
 export function imageOf(result: ToolResult): {
@@ -181,7 +143,7 @@ function footer({ caption, choices }: ImageFooter) {
 }
 
 /**
- * A View that fits the whole picture on the screen, as a slide or a panel
+ * A View that fits the whole picture in the canvas, as a slide or a panel
  * should be seen (ui-image's ImageView, which generateImage's View uses, fits
  * a wide picture to the width and scrolls), with a caption and choices under
  * it when the result has them.

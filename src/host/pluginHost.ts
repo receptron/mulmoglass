@@ -20,7 +20,11 @@ import {
 import { artifactsFileOps } from "./workspace";
 import { dispatchHtml } from "./htmlHost";
 import { createMarkdownHostApp } from "./markdownHost";
-import { generateImage, type ImageSettings } from "./imageGeneration";
+import {
+  editImages,
+  generateImage,
+  type ImageSettings,
+} from "./imageGeneration";
 
 type Handler = (args: Record<string, unknown>) => Promise<unknown>;
 
@@ -66,16 +70,19 @@ export function setImageSettingsSource(source: () => ImageSettings): void {
   imageSettings = source;
 }
 
+/** The user's image backend and keys, now. */
+export const currentImageSettings = (): ImageSettings => imageSettings();
+
 function createAppContext(): ToolContextApp {
   const generate = (prompt: string) => generateImage(prompt, imageSettings());
   return {
     getConfig: () => undefined,
     setConfig: () => {},
     generateImage: generate,
-    // A MulmoGlass extension for its storyboard tool (src/tools/storyboard.ts):
-    // gui-chat-protocol's generateImage takes a prompt only.
-    generateImageWithReferences: (prompt: string, referenceImages: string[]) =>
-      generateImage(prompt, imageSettings(), referenceImages),
+    // A new image from saved ones (artifacts/images/…), as in MulmoChat and
+    // MulmoClaude: gui-chat-protocol's generateImage takes a prompt only.
+    editImages: (prompt: unknown, imagePaths: unknown) =>
+      editImages(prompt, imagePaths, imageSettings()),
     // presentDocument: load/save/create documents and fill images
     ...createMarkdownHostApp(generate),
   };
