@@ -18,9 +18,9 @@ interface UseToolResultsOptions {
   onResult?: (result: ToolResult, startedAt: number) => string | undefined;
   /** When the user last spoke (Date.now()), for ToolContext.userSpokeAt. */
   getUserSpokeAt?: () => number | undefined;
-  /** Resolves when the model's voice has finished playing (at once when it
-   *  isn't playing). */
-  waitForSpeechEnd?: () => Promise<void>;
+  /** Resolves when the model's voice has finished playing: true to go on,
+   *  false when the chat ended while waiting (the step is dropped). */
+  waitForSpeechEnd?: () => Promise<boolean>;
 }
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -104,7 +104,9 @@ export function useToolResults(options: UseToolResultsOptions) {
         !result.sequence.waitsForUser &&
         !result.cancelled
       ) {
-        await options.waitForSpeechEnd?.();
+        // Stopped while it waited: not shown after Stop, and there is no
+        // session to send it to.
+        if ((await options.waitForSpeechEnd?.()) === false) return;
       }
       logTool("result", msg.name, {
         ms: Date.now() - started,
