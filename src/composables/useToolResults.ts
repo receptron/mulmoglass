@@ -18,6 +18,9 @@ interface UseToolResultsOptions {
   onResult?: (result: ToolResult, startedAt: number) => string | undefined;
   /** When the user last spoke (Date.now()), for ToolContext.userSpokeAt. */
   getUserSpokeAt?: () => number | undefined;
+  /** Resolves when the model's voice has finished playing: true to go on,
+   *  false when the chat ended while waiting (the step is dropped). */
+  waitForSpeechEnd?: () => Promise<boolean>;
 }
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -84,6 +87,27 @@ export function useToolResults(options: UseToolResultsOptions) {
         previous,
         options.getUserSpokeAt?.(),
       );
+      // A step of a sequence (a slide, a story panel) is shown, and goes back
+      // to the model, when the model has finished talking about the step
+      // before. The model asks for the next step at the end of its reply,
+      // long before the reply's audio has played, so a step drawn faster
+      // than that audio otherwise appeared while it was still talking about
+      // the one before (MulmoChat with Grok: slides 2 to 4 of 4). The same
+      // as MulmoChat's useToolResults.
+      // Not a step that waits for the user (a guide step, a panel with
+      // choices): the plugin holds the step after it until the user has
+      // spoken since it appeared, and it counts from when execute()
+      // returned, so speech during a wait here would count as the user
+      // having seen a step that isn't on the screen yet.
+      if (
+        result.sequence &&
+        !result.sequence.waitsForUser &&
+        !result.cancelled
+      ) {
+        // Stopped while it waited: not shown after Stop, and there is no
+        // session to send it to.
+        if ((await options.waitForSpeechEnd?.()) === false) return;
+      }
       logTool("result", msg.name, {
         ms: Date.now() - started,
         message: result.message,
