@@ -94,7 +94,16 @@ export function useToolResults(options: UseToolResultsOptions) {
       // than that audio otherwise appeared while it was still talking about
       // the one before (MulmoChat with Grok: slides 2 to 4 of 4). The same
       // as MulmoChat's useToolResults.
-      if (result.sequence && !result.cancelled) {
+      // Not a step that waits for the user (a guide step, a panel with
+      // choices): the plugin holds the step after it until the user has
+      // spoken since it appeared, and it counts from when execute()
+      // returned, so speech during a wait here would count as the user
+      // having seen a step that isn't on the screen yet.
+      if (
+        result.sequence &&
+        !result.sequence.waitsForUser &&
+        !result.cancelled
+      ) {
         await options.waitForSpeechEnd?.();
       }
       logTool("result", msg.name, {
