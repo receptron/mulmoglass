@@ -56,6 +56,13 @@ const imageDataOf = (result: ToolResult): string | null => {
   return typeof data?.imageData === "string" ? data.imageData : null;
 };
 
+// A document's image prompt is its alt text, often a caption or a question
+// ("Why do cats purr?", "Table of common cat breeds"), which Gemini answered
+// with no image (finish reason NO_IMAGE) 4 times in 10; asked to draw it,
+// 0 in 10 (the same fix as presentSlide's title framing).
+const documentImagePrompt = (alt: string) =>
+  `Draw a picture for a document: ${alt}`;
+
 /** The markdown host backends; `generateImage` fills image placeholders. */
 export function createMarkdownHostApp(
   generateImage: (prompt: string) => Promise<ToolResult>,
@@ -89,11 +96,18 @@ export function createMarkdownHostApp(
       return { themes: [] };
     },
 
-    // Images are inlined as data URLs; a failed image becomes a text marker.
+    // Images are inlined as data URLs; a failed image becomes a text marker,
+    // and its reason goes to the console (the marker can't carry it).
     async fillImages(markdown) {
       const { markdown: filled } = await fillImagePlaceholders(markdown, {
-        resolveImage: async (prompt) =>
-          imageDataOf(await generateImage(prompt)),
+        resolveImage: async (prompt) => {
+          const result = await generateImage(documentImagePrompt(prompt));
+          const imageData = imageDataOf(result);
+          if (!imageData) {
+            console.warn("[document] no image for", prompt, result.message);
+          }
+          return imageData;
+        },
       });
       return { markdown: filled };
     },
