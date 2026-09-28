@@ -280,6 +280,11 @@
   dependencies:
     jspdf "^4.0.0"
 
+"@gui-chat-plugin/sequence@^0.2.0":
+  version "0.2.0"
+  resolved "https://registry.yarnpkg.com/@gui-chat-plugin/sequence/-/sequence-0.2.0.tgz#01cdcd0e31fbdc7efab46308a162762142175b61"
+  integrity sha512-CjUR3Gy1QOa5FRgW74cIp7EM+IXgjVcgGXjxp+W5aP9qT/vbQp4KCQZOY0tMa+rftM5/aGuTnjR9V5jKenJpmQ==
+
 "@gui-chat-plugin/spreadsheet@^2.0.0":
   version "2.0.0"
   resolved "https://registry.yarnpkg.com/@gui-chat-plugin/spreadsheet/-/spreadsheet-2.0.0.tgz#1defff4a6322ab02d8f39a4eaa83a8728b0545e2"
@@ -2300,10 +2305,10 @@ graceful-fs@^4.2.4:
   resolved "https://registry.yarnpkg.com/graceful-fs/-/graceful-fs-4.2.11.tgz#4183e4e8bf08bb6e05bbb2f7d2e0c8f712ca40e3"
   integrity sha512-RbJ5/jmFcNNCcDV5o9eTnBLJ/HszWV0P73bc+Ff4nS/rJj+YaS6IGyiOL0VoBYX+l1Wrl3k63h/KrH+nhJ0XvQ==
 
-gui-chat-protocol@^2.0.0:
-  version "2.0.0"
-  resolved "https://registry.yarnpkg.com/gui-chat-protocol/-/gui-chat-protocol-2.0.0.tgz#96f0f0a115c92f8567b68b9c74a53514e1f3253f"
-  integrity sha512-E02kPSXKH2bX4WAp6TuMjSx4Ftzr2n8XEQtPhZxRCKCBO9ss3Qkx4G5xWeZ6bVUCZtyhB+N8V8Jlv+YRPQJQ9w==
+gui-chat-protocol@^2.2.0:
+  version "2.2.0"
+  resolved "https://registry.yarnpkg.com/gui-chat-protocol/-/gui-chat-protocol-2.2.0.tgz#430bdc60241ce600f7992174bb15f1e73938df59"
+  integrity sha512-WDKQ+H8vkf3IVF7nvc3Xa/dHxHmoHcd5lFKbGVGHwa9WvVJmn63fvFY3UU97bjJZR7mQ9uHIre3hMnDHBw+IGQ==
 
 hachure-fill@^0.5.2:
   version "0.5.2"

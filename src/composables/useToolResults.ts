@@ -12,14 +12,12 @@ interface UseToolResultsOptions {
   sendInstructions: (instructions: string) => boolean;
   isConnected: () => boolean;
   /** Every result, before its instructions go to the model, with when its
-   *  call started (performance.now()). Returns instructions to send instead
-   *  of the result's, or undefined to keep them. */
-  onResult?: (
-    name: string,
-    args: Record<string, unknown>,
-    result: ToolResult,
-    startedAt: number,
-  ) => string | undefined;
+   *  call started (Date.now(), as gui-chat-protocol's sequence keeper
+   *  takes it). Returns instructions to send instead of the result's, or
+   *  undefined to keep them. */
+  onResult?: (result: ToolResult, startedAt: number) => string | undefined;
+  /** When the user last spoke (Date.now()), for ToolContext.userSpokeAt. */
+  getUserSpokeAt?: () => number | undefined;
 }
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -72,7 +70,7 @@ export function useToolResults(options: UseToolResultsOptions) {
   const handleToolCall = async (msg: ToolCallMessage, argStr: string) => {
     const plugin = getToolPlugin(msg.name);
     runningMessage.value = plugin?.generatingMessage || "Working...";
-    const started = performance.now();
+    const started = Date.now();
     try {
       const args = argStr ? JSON.parse(argStr) : {};
       logTool("call", msg.name, args);
@@ -80,9 +78,14 @@ export function useToolResults(options: UseToolResultsOptions) {
         options.sendInstructions(plugin.waitingMessage);
       }
       const previous = selectedResult.value;
-      const result = await toolExecute(msg.name, args, previous);
+      const result = await toolExecute(
+        msg.name,
+        args,
+        previous,
+        options.getUserSpokeAt?.(),
+      );
       logTool("result", msg.name, {
-        ms: Math.round(performance.now() - started),
+        ms: Date.now() - started,
         message: result.message,
         instructions: result.instructions,
         jsonData: result.jsonData,
@@ -90,8 +93,7 @@ export function useToolResults(options: UseToolResultsOptions) {
       });
       if (!result.cancelled) addOrUpdate(result, previous);
       const instructions =
-        options.onResult?.(msg.name, args, result, started) ??
-        result.instructions;
+        options.onResult?.(result, started) ?? result.instructions;
       sendOutput(msg.call_id, {
         status: result.message,
         data: result.jsonData,

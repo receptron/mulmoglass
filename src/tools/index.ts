@@ -18,8 +18,7 @@ import ShapeScriptPlugin from "@mulmoclaude/shapescript-plugin/vue";
 import FormPlugin from "@mulmoclaude/form-plugin/vue";
 import SpreadsheetPlugin from "@gui-chat-plugin/spreadsheet/vue";
 import MindMapPlugin from "@gui-chat-plugin/mindmap/vue";
-import { PresentSlidePlugin } from "./presentSlide";
-import { DefineStoryboardPlugin, PresentPanelPlugin } from "./storyboard";
+import { plugins as sequencePlugins } from "@gui-chat-plugin/sequence/vue";
 import WeatherPlugin from "@gui-chat-plugin/weather/vue";
 
 import type { ToolPlugin } from "./types";
@@ -67,11 +66,10 @@ const registeredPlugins: { plugin: ToolPlugin }[] = [
       systemPrompt: GENERATE_IMAGE_PROMPT,
     },
   },
-  // Slideshows: one generated picture per slide (./presentSlide.ts).
-  PresentSlidePlugin,
-  // Stories in pictures, with characters kept the same (./storyboard.ts).
-  DefineStoryboardPlugin,
-  PresentPanelPlugin,
+  // Slideshows, step-by-step guides and stories in pictures
+  // (@gui-chat-plugin/sequence: presentSlide, defineStoryboard, presentPanel),
+  // drawn with context.app and saved in OPFS.
+  ...sequencePlugins.map((plugin) => ({ plugin })),
   {
     plugin: { ...MarkdownPlugin.plugin, systemPrompt: PRESENT_DOCUMENT_PROMPT },
   },
@@ -148,15 +146,18 @@ export const pluginSystemPrompts = (): string =>
     .filter((prompt): prompt is string => !!prompt)
     .join("\n");
 
-/** Run a tool call from the model. */
+/** Run a tool call from the model. `userSpokeAt` is when the user last
+ *  spoke (Date.now()), from the sequence keeper, for the tools that hold a
+ *  step until they have. */
 export async function toolExecute(
   name: string,
   args: Record<string, unknown>,
   currentResult: ToolResult | null,
+  userSpokeAt?: number,
 ): Promise<ToolResult & { toolName: string; uuid: string }> {
   const execute = executes[name];
   if (!execute) throw new Error(`Plugin ${name} not found`);
-  const context = createHostContext(currentResult);
+  const context = createHostContext(currentResult, userSpokeAt);
   const result = await execute(context, args);
   // An update keeps the result it replaces (same UUID).
   const uuid =
