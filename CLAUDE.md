@@ -178,6 +178,10 @@ that reads like a question, such as a slide about ATP's structure) unless the re
 `responseModalities: ["IMAGE"]` (`src/host/imageGeneration.ts`). Even then, a prompt that opens with a
 question ("What is Photosynthesis?. A bright, sunny day…", presentSlide's title then its prompt)
 got no image (finish reason `NO_IMAGE`) 4 times in 12; `A presentation slide titled "…". …` got 0.
+presentDocument's images had the same problem: their prompt is the alt text the model wrote, often a
+caption or a question ("Why do cats purr?", "Table of common cat breeds"), and 8 of 24 came back as
+the "🖼️ Image: …" text marker. `Draw a picture for a document: …` (`src/host/markdownHost.ts`) got
+0 of 36. A failed image's reason is logged (`[document] no image for …`), since the marker can't carry it.
 
 Every generated image is saved to `artifacts/images/<YYYY>/<MM>/<id>.<ext>` in OPFS, as MulmoClaude
 saves its images, and the tool result tells the model the path ("saved to …"), so a later call can
