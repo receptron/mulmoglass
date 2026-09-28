@@ -300,6 +300,15 @@ function waitForSpeechEnd(): Promise<void> {
   });
 }
 const userSpeaking = ref(false);
+// A session that ends mid-reply (stopped, dropped) may send no
+// playback-stopped event (OpenAI's stopChat doesn't), and a stale
+// isAudioPlaying would hold every sequence step of the next session for
+// SPEECH_WAIT_MAX_MS. The same as MulmoChat's HomeView.
+watch(chatActive, (active) => {
+  if (active) return;
+  userSpeaking.value = false;
+  isAudioPlaying.value = false;
+});
 const caption = ref("");
 let captionDone = false;
 
