@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@gui-chat-plugin/mindmap": "^2.0.0",
+    "@gui-chat-plugin/sequence": "^0.2.0",
     "@gui-chat-plugin/spreadsheet": "^2.0.0",
     "@gui-chat-plugin/weather": "^2.0.0",
     "@mulmochat-plugin/generate-image": "^2.0.0",
@@ -31,7 +32,7 @@
     "@mulmoclaude/shapescript-plugin": "^7.1.0",
     "echarts": "^6.0.0",
     "fflate": "^0.8.3",
-    "gui-chat-protocol": "^2.0.0",
+    "gui-chat-protocol": "^2.2.0",
     "material-icons": "^1.13.14",
     "uuid": "^14.0.2",
     "vue": "^3.5.43"

@@ -162,7 +162,7 @@ import {
   useSettings,
 } from "./composables/useSettings";
 import { useToolResults } from "./composables/useToolResults";
-import { useSequence } from "./composables/useSequence";
+import { createSequenceKeeper } from "gui-chat-protocol";
 import { useVoiceSession } from "./voice/useVoiceSession";
 import {
   getToolPlugin,
@@ -239,12 +239,15 @@ const {
   sendFunctionCallOutput,
   sendInstructions,
   isConnected,
-  onResult: (name, args, result, startedAt) =>
-    sequence.observeToolResult(name, args, result, startedAt),
+  onResult: (result, startedAt) => sequence.observe(result, startedAt),
+  getUserSpokeAt: () => sequence.userSpokeAt(),
 });
 
-// Asks the model to go on when it ends a reply mid-sequence.
-const sequence = useSequence({
+// Keeps a slideshow or a story going (gui-chat-protocol's sequence keeper):
+// asks the model once to go on when it ends a reply mid-sequence. The
+// results say where the sequence is (ToolResult.sequence), and the user
+// speaking stops it.
+const sequence = createSequenceKeeper({
   isIdle: () =>
     chatActive.value &&
     !conversationActive.value &&
@@ -252,6 +255,7 @@ const sequence = useSequence({
     !userSpeaking.value &&
     !runningMessage.value,
   sendInstructions,
+  log: (message) => console.info(`[sequence] ${message}`),
 });
 
 setImageSettingsSource(() => ({

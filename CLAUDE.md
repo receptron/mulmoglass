@@ -150,56 +150,28 @@ When a question needs live data (weather, news, prices), give the model a tool t
 weather plugin, JMA, Japan only) rather than expecting it to decline.
 
 A tool result's `instructions` decide whether the model keeps going, and even good ones are not
-always followed. Slideshows are `presentSlide` calls (`src/tools/presentSlide.ts`, one generated
-picture per slide, with the slide number and total as arguments), each telling the model to explain
-the slide and call the next one in the same reply. The model still ended replies mid-slideshow
-(about one run in three with generateImage and "Slide N of M" prompts), so `useSequence` asks it
-once per slide to go on when a reply ends, nothing plays or runs, and slides are left; the user
-speaking stops that. Storyboards are sequences too (below); a tool that should be kept going this
-way returns its place from `src/tools/sequences.ts`, and shares the pieces in `src/tools/sequence.ts`. A slide asked for before the user spoke gets instructions to answer them first
-instead of its own "go on" (Gemini and Grok otherwise said "I've stopped" and carried on), unless
-it failed. The host can notice speech late or not at all (Gemini's input transcript arrives seconds
-after; `interrupted` helps only when the model was talking), so a slide's instructions and the
-host's request to go on both also tell the model to answer a user who asked to stop. Gemini
-Live sometimes called the next slide twice (once in the reply it starts after a tool output, once in
-the one the instructions start); an identical call within a minute is dropped, after waiting for the
-first to be made.
+always followed. **Slideshows, step-by-step guides and stories in pictures come from
+[`@gui-chat-plugin/sequence`](https://github.com/receptron/gui-chat-plugins)** (presentSlide,
+defineStoryboard, presentPanel), the package MulmoChat uses too. Fix them there, not here: this app
+only hosts them. Its `execute()` runs in the page like every other plugin's, and needs from the host:
 
-Storyboards (`src/tools/storyboard.ts`) tell a story in pictures with characters who look the same
-throughout: `defineStoryboard` draws a reference sheet per character, in parallel, and shows the
-cast; `presentPanel` draws each panel with the sheets of the characters in it as reference images.
-Every image service takes them: Gemini as `inlineData` parts, OpenAI on `/v1/images/edits` (multipart
-`image[]`), xAI on `/v1/images/edits` as an `images` list (a single `image` takes one). They are
-shrunk to 768 px JPEG first. A description repeated in each prompt did not keep a character the same;
-the reference sheets did, on all three.
+- `context.app.generateImage(prompt)` and `editImages(prompt, imagePaths)` (`src/host/pluginHost.ts`):
+  references are saved pictures by path, loaded from OPFS (`src/host/imageStore.ts`, MulmoChat's
+  refusals and limits) and sent to every image service (Gemini as `inlineData` parts, OpenAI and xAI
+  on `/v1/images/edits`), shrunk to 768 px JPEG first. A character's reference sheet kept them the
+  same on all three; a description repeated in each prompt did not.
+- `context.files.artifacts` for its records (`artifacts/slideshows/<id>.json`,
+  `artifacts/storyboards/<id>.json`, the files MulmoChat's `makeMovie` reads).
+- `context.userSpokeAt`, so a guide's step or a story's choice waits until the user has spoken, and
+  `context.currentResult`, so a step already on the screen isn't shown again. No `conversationId`:
+  the page runs one conversation.
 
-**The sequence tools are shared with MulmoChat** (`../chat`), which ported them and gave them a
-server; this app now has the same layout, so a fix goes into both. `src/tools/sequenceTools.ts` is a
-copy of MulmoChat's `server/plugins/sequenceTools.ts` (definitions, prompts, argument checks,
-instructions, saved shapes; without makeMovie), `src/host/sequenceHost.ts` a port of its
-`server/plugins/sequenceHost.ts` (drawing and records), and `src/tools/presentSlide.ts`,
-`storyboard.ts`, `sequence.ts`, `sequences.ts` match its `src/tools/` files, with a call to the host
-where MulmoChat posts to its server. Until the tools move into a package, change the two together.
-References are saved pictures, by path: the host loads them from OPFS (`src/host/imageStore.ts`,
-MulmoChat's refusals and limits), and `context.app.editImages(prompt, imagePaths)` offers the same
-to plugins, as in MulmoChat and MulmoClaude. Slideshows are saved as
-`artifacts/slideshows/<id>.json` and storyboards as `artifacts/storyboards/<id>.json`, and the
-result names the ID, the same files MulmoChat's `makeMovie` makes a movie from (a story made here
-could become one there, once the files can move between the two).
-
-Some steps wait for the user instead of going on: a step of a step-by-step guide (`presentSlide` with
-mode `"steps"`) and a storyboard panel that offers choices (an interactive story). Their
-`SequenceStep` says `waitsForUser`, so `useSequence` doesn't ask the model to go on. The instructions
-alone were not enough: Gemini Live went on to the next step in the reply that explained the current
-one, and Grok to the next panel in the reply that read the choices out. So the tool itself refuses a
-step past a waiting one until the user has spoken since it appeared (`userSpokeSince`, fed by
-`onSpeechStarted`), and returns that as a cancelled result without instructions. A step being drawn
-counts as waiting (`shownAt` is Infinity until it appears), or a call that overlapped it would pass. In testing, every
-real "next" and every spoken choice got through on all three voices. A guide keeps its steps: "go
-back" re-shows the step as it was, without drawing it again (unless it is the result selected on
-the screen, which another tool's result may have replaced), and each new step is drawn with the
-previous one as its reference image. Choices make a storyboard interactive even when
-`defineStoryboard` didn't say so (Gemini gave choices without the flag).
+Its results carry `sequence` (gui-chat-protocol 2.1), and **gui-chat-protocol's
+`createSequenceKeeper`** (wired in `App.vue`) asks the model once to go on when it ends a reply
+mid-sequence (it did, about one run in three), and records when the user spoke for `userSpokeAt`.
+Its times are `Date.now()`, so `useToolResults` times calls with it too. What was learned here by
+voice (Gemini's repeated calls, the holds, going back to a step) moved with the code, as
+comments in the package's `src/core/`.
 
 Gemini's image model answers some prompts with text and no image (one call in three for a prompt
 that reads like a question, such as a slide about ATP's structure) unless the request sets

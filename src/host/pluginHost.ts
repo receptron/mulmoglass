@@ -70,9 +70,6 @@ export function setImageSettingsSource(source: () => ImageSettings): void {
   imageSettings = source;
 }
 
-/** The user's image backend and keys, now. */
-export const currentImageSettings = (): ImageSettings => imageSettings();
-
 function createAppContext(): ToolContextApp {
   const generate = (prompt: string) => generateImage(prompt, imageSettings());
   return {
@@ -88,14 +85,17 @@ function createAppContext(): ToolContextApp {
   };
 }
 
-/** The context a plugin's execute() gets, tool call or View dispatch. */
+/** The context a plugin's execute() gets, tool call or View dispatch. No
+ *  conversationId: the page runs one conversation. */
 export function createHostContext(
   currentResult?: ToolResult | null,
+  userSpokeAt?: number,
 ): HostToolContext {
   return {
     currentResult: currentResult ?? null,
     app: createAppContext(),
     files: { artifacts: artifactsFileOps },
+    ...(userSpokeAt !== undefined && { userSpokeAt }),
   };
 }
 
