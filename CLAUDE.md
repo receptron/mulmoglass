@@ -23,7 +23,9 @@ fails lint on every line (it did, on PR #1).
 `--use-fake-device-for-media-stream --use-file-for-fake-audio-capture=<wav>` plays a WAV as the
 microphone; macOS `say -o prompt.aiff "…"` plus a long tail of silence makes the WAV (Chrome loops
 the file). Seed the keys into `localStorage` before load, click Connect, then read the status and
-caption (`data-testid="status"`, `"caption"`). This is how every plugin here was verified. Stop
+caption (`data-testid="status"`, `"caption"`). This is how every plugin here was verified. To test without
+spending on images, set `localStorage.mulmoglass_mock_image_ms` to a delay (`"8000"`): every image is
+then a PNG showing its prompt, returned after that delay (`src/host/mockImage.ts`, dev builds only). Stop
 editing files while a run is going: Vite reloads the page on save, and the run fails with a
 "detached frame" that looks like an app bug.
 

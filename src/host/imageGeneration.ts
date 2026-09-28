@@ -336,12 +336,18 @@ export async function generateImage(
 ): Promise<ToolResult> {
   try {
     const references = await Promise.all(sourceImages.map(referenceImage));
+    // Tests, dev builds only (./mockImage.ts); a production build leaves
+    // the import out.
+    const mocked = import.meta.env.DEV
+      ? await (await import("./mockImage")).mockImage(prompt, references.length)
+      : undefined;
     const imageData =
-      settings.backend === "openai"
+      mocked ??
+      (settings.backend === "openai"
         ? await openaiImage(prompt, settings.openaiKey, references)
         : settings.backend === "xai"
           ? await xaiImage(prompt, settings.xaiKey, references)
-          : await geminiImage(prompt, settings.geminiKey, references);
+          : await geminiImage(prompt, settings.geminiKey, references));
     const imagePath = await saveImage(bytesOf(imageData));
     // As in MulmoChat: the model is told when there is no path, so it doesn't
     // look for one.
