@@ -241,6 +241,7 @@ const {
   isConnected,
   onResult: (result, startedAt) => sequence.observe(result, startedAt),
   getUserSpokeAt: () => sequence.userSpokeAt(),
+  waitForSpeechEnd,
 });
 
 // Keeps a slideshow or a story going (gui-chat-protocol's sequence keeper):
@@ -274,6 +275,30 @@ function openSettings(focusKey: ApiKeyName | null = null) {
 }
 const errorMessage = ref("");
 const isAudioPlaying = ref(false);
+
+// The longest a sequence step waits for the model's voice to finish: a
+// playback-stopped event that never comes must not hold the step forever.
+const SPEECH_WAIT_MAX_MS = 120_000;
+
+/** Resolves when the model's voice has finished playing, the chat has ended,
+ *  or SPEECH_WAIT_MAX_MS has passed. */
+function waitForSpeechEnd(): Promise<void> {
+  if (!isAudioPlaying.value || !chatActive.value) return Promise.resolve();
+  return new Promise((resolve) => {
+    const done = () => {
+      stopWatching();
+      clearTimeout(timer);
+      resolve();
+    };
+    const timer = setTimeout(done, SPEECH_WAIT_MAX_MS);
+    const stopWatching = watch(
+      [isAudioPlaying, chatActive],
+      ([playing, active]) => {
+        if (!playing || !active) done();
+      },
+    );
+  });
+}
 const userSpeaking = ref(false);
 const caption = ref("");
 let captionDone = false;
