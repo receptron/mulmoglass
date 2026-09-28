@@ -11,7 +11,8 @@ const WIDTH = 1024;
 const HEIGHT = 576;
 const MARGIN = 32;
 
-/** The mock's delay in milliseconds, or undefined when images are real. */
+/** The mock's delay in milliseconds, or undefined when images are real.
+ *  Throws for a value that isn't a delay. */
 function mockImageDelayMs(): number | undefined {
   let raw: string | null;
   try {
@@ -21,7 +22,14 @@ function mockImageDelayMs(): number | undefined {
   }
   if (raw === null || raw === "") return undefined;
   const ms = Number(raw);
-  return Number.isFinite(ms) && ms >= 0 ? ms : undefined;
+  // A mistyped value fails the image rather than falling back to the real,
+  // paid models (MulmoChat's server refuses to start).
+  if (!Number.isFinite(ms) || ms < 0) {
+    throw new Error(
+      `${MOCK_KEY} must be a delay in milliseconds, not "${raw}"`,
+    );
+  }
+  return ms;
 }
 
 let count = 0;
