@@ -94,7 +94,8 @@ export function useOpenAIRealtime(options: VoiceSessionOptions): VoiceSession {
   // response.created/done echo; only those settle it. (MulmoChat #224.)
   let responseRunning = false;
   // Our response.create, sent and not yet settled.
-  let pendingRequest: { eventId: string; instructions?: string } | null = null;
+  // Its instructions aren't kept: they are in the conversation already.
+  let pendingRequest: { eventId: string } | null = null;
   let heldResponse: { instructions: string[] } | null = null;
   let requestCount = 0;
 
@@ -138,7 +139,7 @@ export function useOpenAIRealtime(options: VoiceSessionOptions): VoiceSession {
     });
     // A closed channel (a tool finishing after Stop) changes nothing, so the
     // next session doesn't start out waiting for a response that never ran.
-    if (sent) pendingRequest = { eventId, instructions };
+    if (sent) pendingRequest = { eventId };
     return sent;
   };
 
@@ -175,12 +176,14 @@ export function useOpenAIRealtime(options: VoiceSessionOptions): VoiceSession {
           const error = event.error as
             { code?: unknown; event_id?: unknown } | undefined;
           if (pendingRequest && error?.event_id === pendingRequest.eventId) {
-            const refused = pendingRequest;
             pendingRequest = null;
             // Our request raced a response the server started itself (the
             // user's own turn): hold it again, ahead of later ones.
             if (error.code === "conversation_already_has_active_response") {
-              holdResponse(refused.instructions, true);
+              // Only the response is asked for again: its instructions went
+              // into the conversation with it, and sending them again would
+              // leave a second copy there.
+              holdResponse(undefined, true);
               releaseHeldResponse();
               break;
             }
