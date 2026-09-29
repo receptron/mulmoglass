@@ -17,7 +17,7 @@
   },
   "dependencies": {
     "@gui-chat-plugin/mindmap": "^2.0.0",
-    "@gui-chat-plugin/sequence": "0.4.0",
+    "@gui-chat-plugin/sequence": "0.4.1",
     "@gui-chat-plugin/spreadsheet": "^2.0.0",
     "@gui-chat-plugin/weather": "^2.0.0",
     "@mulmochat-plugin/generate-image": "^2.0.0",
