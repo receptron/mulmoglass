@@ -168,6 +168,11 @@ only hosts them. Its `execute()` runs in the page like every other plugin's, and
   `context.currentResult`, so a step already on the screen isn't shown again. No `conversationId`:
   the page runs one conversation.
 
+A slide may be HTML instead of a picture (0.3): the package's View shows it in a sandboxed `srcdoc`
+iframe that loads Tailwind from jsDelivr, and needs nothing from the host (no image, no file). A
+page CSP that restricted `frame-src` or scripts would reach that iframe too (a `srcdoc` document
+inherits it); `firebase.json` sets only `frame-ancestors`.
+
 Its results carry `sequence` (gui-chat-protocol 2.1), and **gui-chat-protocol's
 `createSequenceKeeper`** (wired in `App.vue`) asks the model once to go on when it ends a reply
 mid-sequence (it did, about one run in three), and records when the user spoke for `userSpokeAt`.

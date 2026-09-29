@@ -280,10 +280,10 @@
   dependencies:
     jspdf "^4.0.0"
 
-"@gui-chat-plugin/sequence@^0.2.0":
-  version "0.2.0"
-  resolved "https://registry.yarnpkg.com/@gui-chat-plugin/sequence/-/sequence-0.2.0.tgz#01cdcd0e31fbdc7efab46308a162762142175b61"
-  integrity sha512-CjUR3Gy1QOa5FRgW74cIp7EM+IXgjVcgGXjxp+W5aP9qT/vbQp4KCQZOY0tMa+rftM5/aGuTnjR9V5jKenJpmQ==
+"@gui-chat-plugin/sequence@0.3.0":
+  version "0.3.0"
+  resolved "https://registry.yarnpkg.com/@gui-chat-plugin/sequence/-/sequence-0.3.0.tgz#98c6bfb924ef8b1eb859233d728072d91906f7a8"
+  integrity sha512-GDZzhNjS5GJAn207nFqxtW4AzakcgXrAzoyJAdQZKIsvkoAVpDc8/K+cQb0mrum8KC2p0kbFgsgUHQ91tn2V1A==
 
 "@gui-chat-plugin/spreadsheet@^2.0.0":
   version "2.0.0"
