@@ -94,14 +94,10 @@ export function useOpenAIRealtime(options: VoiceSessionOptions): VoiceSession {
   // response.created/done echo; only those settle it. (MulmoChat #224.)
   let responseRunning = false;
   // Our response.create, sent and not yet settled.
-  let pendingRequest: { eventId: string; instructions?: string } | null = null;
+  // Its instructions aren't kept: they are in the conversation already.
+  let pendingRequest: { eventId: string } | null = null;
   let heldResponse: { instructions: string[] } | null = null;
   let requestCount = 0;
-  // A response.create's `instructions` replace the session's for that
-  // response, which would drop the base prompt, the plugins' prompts and the
-  // user's language (a slideshow's next slide came back in English, without
-  // its rules). So a follow-up is sent as the session's plus its own.
-  let sessionInstructions = "";
 
   const isResponseBusy = () => responseRunning || pendingRequest !== null;
 
@@ -119,19 +115,31 @@ export function useOpenAIRealtime(options: VoiceSessionOptions): VoiceSession {
     }
     requestCount += 1;
     const eventId = `mulmoglass_response_${requestCount}`;
+    // Follow-up instructions (a tool's "slide 2 is on the screen: explain
+    // it, then call presentSlide for slide 3") go into the conversation as a
+    // system message, not as the response's `instructions`, which replace the
+    // session prompt for that reply: appended to the whole session prompt,
+    // they were read as background, and the model often called the next
+    // slide without a word about the one on the screen (slide 1 in about 5
+    // runs of 6). As a message, every slide was explained in 11 runs of 12.
+    if (instructions) {
+      send({
+        type: "conversation.item.create",
+        item: {
+          type: "message",
+          role: "system",
+          content: [{ type: "input_text", text: instructions }],
+        },
+      });
+    }
     const sent = send({
       type: "response.create",
       event_id: eventId,
-      response: {
-        ...(instructions
-          ? { instructions: `${sessionInstructions}\n\n${instructions}` }
-          : {}),
-        metadata: { request_id: eventId },
-      },
+      response: { metadata: { request_id: eventId } },
     });
     // A closed channel (a tool finishing after Stop) changes nothing, so the
     // next session doesn't start out waiting for a response that never ran.
-    if (sent) pendingRequest = { eventId, instructions };
+    if (sent) pendingRequest = { eventId };
     return sent;
   };
 
@@ -168,12 +176,14 @@ export function useOpenAIRealtime(options: VoiceSessionOptions): VoiceSession {
           const error = event.error as
             { code?: unknown; event_id?: unknown } | undefined;
           if (pendingRequest && error?.event_id === pendingRequest.eventId) {
-            const refused = pendingRequest;
             pendingRequest = null;
             // Our request raced a response the server started itself (the
             // user's own turn): hold it again, ahead of later ones.
             if (error.code === "conversation_already_has_active_response") {
-              holdResponse(refused.instructions, true);
+              // Only the response is asked for again: its instructions went
+              // into the conversation with it, and sending them again would
+              // leave a second copy there.
+              holdResponse(undefined, true);
               releaseHeldResponse();
               break;
             }
@@ -298,7 +308,7 @@ export function useOpenAIRealtime(options: VoiceSessionOptions): VoiceSession {
       const channel = peer.createDataChannel("oai-events");
       dc = channel;
       channel.addEventListener("open", () => {
-        sessionInstructions = options.buildInstructions();
+        const sessionInstructions = options.buildInstructions();
         send({
           type: "session.update",
           session: {
