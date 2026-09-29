@@ -97,11 +97,6 @@ export function useOpenAIRealtime(options: VoiceSessionOptions): VoiceSession {
   let pendingRequest: { eventId: string; instructions?: string } | null = null;
   let heldResponse: { instructions: string[] } | null = null;
   let requestCount = 0;
-  // A response.create's `instructions` replace the session's for that
-  // response, which would drop the base prompt, the plugins' prompts and the
-  // user's language (a slideshow's next slide came back in English, without
-  // its rules). So a follow-up is sent as the session's plus its own.
-  let sessionInstructions = "";
 
   const isResponseBusy = () => responseRunning || pendingRequest !== null;
 
@@ -119,15 +114,27 @@ export function useOpenAIRealtime(options: VoiceSessionOptions): VoiceSession {
     }
     requestCount += 1;
     const eventId = `mulmoglass_response_${requestCount}`;
+    // Follow-up instructions (a tool's "slide 2 is on the screen: explain
+    // it, then call presentSlide for slide 3") go into the conversation as a
+    // system message, not as the response's `instructions`, which replace the
+    // session prompt for that reply: appended to the whole session prompt,
+    // they were read as background, and the model often called the next
+    // slide without a word about the one on the screen (slide 1 in about 5
+    // runs of 6). As a message, every slide was explained in 11 runs of 12.
+    if (instructions) {
+      send({
+        type: "conversation.item.create",
+        item: {
+          type: "message",
+          role: "system",
+          content: [{ type: "input_text", text: instructions }],
+        },
+      });
+    }
     const sent = send({
       type: "response.create",
       event_id: eventId,
-      response: {
-        ...(instructions
-          ? { instructions: `${sessionInstructions}\n\n${instructions}` }
-          : {}),
-        metadata: { request_id: eventId },
-      },
+      response: { metadata: { request_id: eventId } },
     });
     // A closed channel (a tool finishing after Stop) changes nothing, so the
     // next session doesn't start out waiting for a response that never ran.
@@ -298,7 +305,7 @@ export function useOpenAIRealtime(options: VoiceSessionOptions): VoiceSession {
       const channel = peer.createDataChannel("oai-events");
       dc = channel;
       channel.addEventListener("open", () => {
-        sessionInstructions = options.buildInstructions();
+        const sessionInstructions = options.buildInstructions();
         send({
           type: "session.update",
           session: {

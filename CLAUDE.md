@@ -114,7 +114,7 @@ Define a shared value once. The copies that exist are debt, not precedent:
 | | OpenAI Realtime | Gemini Live | Grok Voice |
 |---|---|---|---|
 | Connection | WebRTC, ephemeral key minted in the browser | WebSocket, the raw Gemini key in the URL | WebSocket, client secret as the `xai-client-secret.<secret>` subprotocol |
-| Follow-up instructions | `response.create` with `instructions` appended to the session's (alone, they would replace the system prompt and the user's language for that reply) | a user turn | a user message + `response.create` (its `instructions` would replace the system prompt) |
+| Follow-up instructions | a system message in the conversation, then `response.create` (as the response's `instructions`, appended to the session's, the model often skipped them: slide 1 went unexplained) | a user turn | a user message + `response.create` (its `instructions` would replace the system prompt) |
 | Overlapping replies | held until `response.done`, once (else `conversation_already_has_active_response`, seen in testing); each request is settled only by its own `event_id` / `metadata.request_id`, since the server starts responses of its own | n/a | held until `response.done`, once |
 | Captions | `response.output_audio_transcript.*` | `outputAudioTranscription` | `response.output_audio_transcript.*` |
 | Speech started/stopped | yes | no events of its own: started when the first `inputTranscription` of a turn arrives (after the user began), stopped when the model's turn starts | yes |
