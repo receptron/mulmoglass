@@ -33,10 +33,12 @@ import {
   type PluginExecute,
 } from "../host/pluginHost";
 
-// The package has no system prompt; this is MulmoChat's (src/tools/index.ts).
-const PRESENT_DOCUMENT_PROMPT = `Use the presentDocument tool to create structured documents with text and embedded images. This tool is ideal for:
-- Guides, tutorials, and how-to content ("create a guide about...", "explain how to...")
-- Educational content (lessons, explanations, timelines, concept visualizations)
+// The package has no system prompt; this is MulmoChat's (src/tools/index.ts),
+// without its claim on explanations ("explain how to...", "lessons,
+// explanations"): here an explanation is a slideshow (BASE_PROMPT in
+// App.vue), and a document is for when the user asks for one.
+const PRESENT_DOCUMENT_PROMPT = `Use the presentDocument tool to create structured documents with text and embedded images, when the user asks for a document, a guide, a report or an article to keep. This tool is ideal for:
+- Guides, tutorials, and how-to content the user asks to have written ("create a guide about...")
 - Reports and presentations (business reports, data analysis, infographics)
 - Articles and blog posts with illustrations
 - Recipes with step-by-step photos
