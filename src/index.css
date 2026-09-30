@@ -7,6 +7,10 @@ body,
   margin: 0;
 }
 
-body {
+/* `html body`, not `body`: several plugin packages (mindmap, quiz, …) ship
+   their demo page's `body { padding: 20px; background: … }` in the style.css
+   we import, which would otherwise inset the whole app. */
+html body {
+  padding: 0;
   background: #020617;
 }
