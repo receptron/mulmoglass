@@ -1,10 +1,10 @@
 <template>
   <div
-    class="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-6"
+    class="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-3 sm:p-6"
     @click.self="$emit('close')"
   >
     <section
-      class="w-full max-w-2xl max-h-full overflow-y-auto rounded-2xl bg-slate-900 p-8 flex flex-col gap-6 text-lg"
+      class="w-full max-w-2xl max-h-full overflow-y-auto rounded-2xl bg-slate-900 p-5 sm:p-8 flex flex-col gap-6 text-lg"
       aria-label="Settings"
     >
       <header class="flex items-center justify-between">
@@ -32,8 +32,9 @@
         Disconnect to change the voice.
       </p>
 
-      <!-- The two choices that decide which keys are needed, side by side. -->
-      <div class="grid grid-cols-2 gap-4">
+      <!-- The two choices that decide which keys are needed, side by side
+           (stacked on a phone, where side by side cuts their labels off). -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <label class="flex flex-col gap-2">
           <span class="text-slate-300">Voice</span>
           <select
