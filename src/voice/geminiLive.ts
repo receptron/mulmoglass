@@ -122,6 +122,11 @@ export function useGeminiLive(options: VoiceSessionOptions): VoiceSession {
   // runs: its output is sent while it runs, and the name, read from
   // pendingToolCalls after the call returned, went out as "unknown".
   const callNames = new Map<string, string>();
+  // An ID for a call that came without one. Unique within the session: a
+  // batch's calls start together, in the same millisecond, and a second call
+  // with the first one's ID was skipped as a duplicate.
+  let fallbackCalls = 0;
+  const fallbackCallId = () => `call-${Date.now()}-${++fallbackCalls}`;
   // Set by the user's first transcribed words in a turn, cleared when the
   // model's turn starts.
   let userSpeaking = false;
@@ -221,7 +226,7 @@ export function useGeminiLive(options: VoiceSessionOptions): VoiceSession {
       // for calls running together). The same as MulmoChat's.
       const calls: Promise<void>[] = [];
       for (const fc of functionCalls) {
-        const callId = fc.id || `call-${Date.now()}`;
+        const callId = fc.id || fallbackCallId();
 
         // Check for duplicates
         if (processedToolCalls.has(callId)) {
@@ -290,7 +295,7 @@ export function useGeminiLive(options: VoiceSessionOptions): VoiceSession {
           // Handle function call (old format - shouldn't happen with new model)
           if (part.functionCall) {
             const functionCall = part.functionCall;
-            const callId = functionCall.id || `call-${Date.now()}`;
+            const callId = functionCall.id || fallbackCallId();
 
             // Skip if already processed
             if (!processedToolCalls.has(callId)) {
