@@ -280,10 +280,10 @@
   dependencies:
     jspdf "^4.0.0"
 
-"@gui-chat-plugin/sequence@0.5.2":
-  version "0.5.2"
-  resolved "https://registry.yarnpkg.com/@gui-chat-plugin/sequence/-/sequence-0.5.2.tgz#ddb37130ebfd7b30332c263fc8f70a22042c39de"
-  integrity sha512-2npo7jsRXmigaAaRHpF6+I5LQVsji/B4Wut3Aa0PW73jxGysnDLXp/B+V+QjaRu+bzUN+xDxotUrAOJZYgm5WA==
+"@gui-chat-plugin/sequence@0.5.3":
+  version "0.5.3"
+  resolved "https://registry.yarnpkg.com/@gui-chat-plugin/sequence/-/sequence-0.5.3.tgz#24d517a69e44893d25f31ca2892d3476c75be020"
+  integrity sha512-t6cBWonnB073ekjp7nUQBS7a3UUSWAgu1NdieqhZo4zOfmcvpbAb4EKGAj6TXgTfUcfvYRdQhRQ1iaJknIYA2A==
   dependencies:
     katex "^0.18.9"
     marked "^18.0.14"

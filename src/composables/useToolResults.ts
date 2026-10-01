@@ -70,14 +70,35 @@ export function useToolResults(options: UseToolResultsOptions) {
     selectedIndex.value = results.value.length - 1;
   };
 
+  // Calls of each tool still running. A model often calls one tool several
+  // times at once, and each call's waiting message and instructions made a
+  // turn of its own (MulmoChat: three searches for an analysis, and the late
+  // turns came after slide 1 was up). So the waiting message goes with the
+  // first call and the instructions with the last to finish; required ones
+  // (a slideshow's step) always go. The same as MulmoChat's useToolResults.
+  const running = new Map<string, number>();
+  const callStarted = (name: string) => {
+    const before = running.get(name) ?? 0;
+    running.set(name, before + 1);
+    return before === 0;
+  };
+  const callEnded = (name: string) => {
+    const left = (running.get(name) ?? 1) - 1;
+    if (left > 0) running.set(name, left);
+    else running.delete(name);
+    return left === 0;
+  };
+
   const handleToolCall = async (msg: ToolCallMessage, argStr: string) => {
     const plugin = getToolPlugin(msg.name);
     runningMessage.value = plugin?.generatingMessage || "Working...";
     const started = Date.now();
+    const first = callStarted(msg.name);
+    let ended = false;
     try {
       const args = argStr ? JSON.parse(argStr) : {};
       logTool("call", msg.name, args);
-      if (plugin?.waitingMessage && options.isConnected()) {
+      if (first && plugin?.waitingMessage && options.isConnected()) {
         options.sendInstructions(plugin.waitingMessage);
       }
       const previous = selectedResult.value;
@@ -87,6 +108,8 @@ export function useToolResults(options: UseToolResultsOptions) {
         previous,
         options.getUserSpokeAt?.(),
       );
+      ended = true;
+      const last = callEnded(msg.name);
       // A step of a sequence (a slide, a story panel) is shown, and goes back
       // to the model, when the model has finished talking about the step
       // before. The model asks for the next step at the end of its reply,
@@ -122,7 +145,7 @@ export function useToolResults(options: UseToolResultsOptions) {
         status: result.message,
         data: result.jsonData,
       });
-      if (instructions) {
+      if (instructions && (last || result.instructionsRequired)) {
         if (plugin?.delayAfterExecution) {
           await sleep(plugin.delayAfterExecution);
         }
@@ -136,6 +159,7 @@ export function useToolResults(options: UseToolResultsOptions) {
         `The previous tool call for "${msg.name}" failed with error: ${error}. Please analyze the error and try an appropriate solution.`,
       );
     } finally {
+      if (!ended) callEnded(msg.name);
       runningMessage.value = "";
     }
   };
