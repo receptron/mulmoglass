@@ -118,6 +118,10 @@ export function useGeminiLive(options: VoiceSessionOptions): VoiceSession {
   const isMuted = ref(false);
   const pendingToolCalls = new Map<string, PendingToolCall>();
   const processedToolCalls = new Set<string>();
+  // Each running call's tool name, for its toolResponse. Set before the call
+  // runs: its output is sent while it runs, and the name, read from
+  // pendingToolCalls after the call returned, went out as "unknown".
+  const callNames = new Map<string, string>();
   // Set by the user's first transcribed words in a turn, cleared when the
   // model's turn starts.
   let userSpeaking = false;
@@ -212,7 +216,10 @@ export function useGeminiLive(options: VoiceSessionOptions): VoiceSession {
         handlers.onSpeechStopped?.();
       }
       const functionCalls = data.toolCall.functionCalls || [];
-
+      // A batch's calls run together, so the host sees them as one batch
+      // (useToolResults sends a tool's waiting message and instructions once
+      // for calls running together). The same as MulmoChat's.
+      const calls: Promise<void>[] = [];
       for (const fc of functionCalls) {
         const callId = fc.id || `call-${Date.now()}`;
 
@@ -223,6 +230,7 @@ export function useGeminiLive(options: VoiceSessionOptions): VoiceSession {
 
         // Mark as processed BEFORE calling handler to prevent double execution
         processedToolCalls.add(callId);
+        callNames.set(callId, fc.name);
 
         const toolCallMsg: ToolCallMessage = {
           type: "response.function_call_arguments.done",
@@ -235,16 +243,11 @@ export function useGeminiLive(options: VoiceSessionOptions): VoiceSession {
         const fixedArgs = fixGoogleArgs(fc.args || {});
         const argStr = JSON.stringify(fixedArgs);
 
-        // Call handler immediately - don't store in pendingToolCalls since we're handling it now
-        await handlers.onToolCall?.(toolCallMsg, callId, argStr);
-
-        // Store ONLY for sendFunctionCallOutput to retrieve the name later
-        pendingToolCalls.set(callId, {
-          id: callId,
-          name: fc.name,
-          args: fc.args || {},
-        });
+        calls.push(
+          Promise.resolve(handlers.onToolCall?.(toolCallMsg, callId, argStr)),
+        );
       }
+      await Promise.all(calls);
     }
 
     // Handle server content
@@ -310,6 +313,7 @@ export function useGeminiLive(options: VoiceSessionOptions): VoiceSession {
         handlers.onTranscriptDone?.();
 
         // Process all pending tool calls (from old serverContent.modelTurn.parts format)
+        const calls: Promise<void>[] = [];
         for (const [callId, functionCall] of pendingToolCalls.entries()) {
           if (!processedToolCalls.has(callId)) {
             const toolCallMsg: ToolCallMessage = {
@@ -320,11 +324,16 @@ export function useGeminiLive(options: VoiceSessionOptions): VoiceSession {
 
             const argStr = JSON.stringify(functionCall.args || {});
             processedToolCalls.add(callId);
-            await handlers.onToolCall?.(toolCallMsg, callId, argStr);
+            callNames.set(callId, functionCall.name);
+            calls.push(
+              Promise.resolve(
+                handlers.onToolCall?.(toolCallMsg, callId, argStr),
+              ),
+            );
           }
         }
-
         pendingToolCalls.clear();
+        await Promise.all(calls);
         conversationActive.value = false;
         handlers.onConversationFinished?.();
       }
@@ -536,14 +545,8 @@ export function useGeminiLive(options: VoiceSessionOptions): VoiceSession {
   };
 
   const sendFunctionCallOutput = (callId: string, output: string) => {
-    // Get the function name from processed tool calls
-    let functionName = "unknown";
-    for (const [id, call] of pendingToolCalls.entries()) {
-      if (id === callId) {
-        functionName = call.name;
-        break;
-      }
-    }
+    const functionName = callNames.get(callId) ?? "unknown";
+    callNames.delete(callId);
 
     return sendWebSocketMessage({
       toolResponse: {
