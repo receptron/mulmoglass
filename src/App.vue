@@ -142,7 +142,7 @@
       @toggle-mute="setMute(!isMuted)"
       @select="select"
       @open-settings="openSettings()"
-      @send-text="sendTypedText"
+      :send-text="sendTypedText"
     />
 
     <SettingsPanel
@@ -470,10 +470,10 @@ async function toggleChat() {
 
 // Typed in the control bar while muted: the user speaking, so a step that
 // waits for them ("next") or a sequence they stop ("stop") hears it.
-function sendTypedText(text: string) {
+function sendTypedText(text: string): boolean {
   console.info("[typed] message", text);
   sequence.userSpoke();
-  sendUserText(text);
+  return sendUserText(text);
 }
 
 // Views (a quiz answer, a form) talk to the model as the user.

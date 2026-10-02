@@ -123,14 +123,15 @@ const props = defineProps<{
   caption: string;
   resultCount: number;
   selectedIndex: number;
+  /** Sends a typed message to the model; false when it couldn't go. */
+  sendText: (text: string) => boolean;
 }>();
 
-const emit = defineEmits<{
+defineEmits<{
   "toggle-chat": [];
   "toggle-mute": [];
   select: [index: number];
   "open-settings": [];
-  "send-text": [text: string];
 }>();
 
 const text = ref("");
@@ -148,17 +149,23 @@ function holdWhileComposing(event: KeyboardEvent): void {
   }
 }
 
-// The box takes the focus when it appears (the user just muted).
-watch(typing, async (shown) => {
-  if (!shown) return;
-  await nextTick();
-  textInput.value?.focus();
-});
+// The box takes the focus when it appears: the user just muted, or the bar
+// appeared with the microphone already muted.
+watch(
+  typing,
+  async (shown) => {
+    if (!shown) return;
+    await nextTick();
+    textInput.value?.focus();
+  },
+  { immediate: true },
+);
 
+// The draft is cleared once the message has gone (a session that closed
+// meanwhile keeps it).
 function send(): void {
   const message = text.value.trim();
   if (!message) return;
-  emit("send-text", message);
-  text.value = "";
+  if (props.sendText(message)) text.value = "";
 }
 </script>
