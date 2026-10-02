@@ -102,11 +102,14 @@
         </p>
       </div>
 
+      <!-- Small, in a corner: a slide or a panel is often being drawn while
+           the one on the screen is explained. -->
       <div
         v-if="runningMessage"
-        class="absolute top-6 left-1/2 -translate-x-1/2 rounded-full bg-slate-800/90 px-6 py-3 text-xl flex items-center gap-3"
+        class="absolute bottom-3 right-3 rounded-full bg-slate-800/70 px-3 py-1 text-sm text-slate-300 flex items-center gap-1.5 pointer-events-none"
+        data-testid="running"
       >
-        <span class="material-icons animate-spin">autorenew</span>
+        <span class="material-icons animate-spin text-base!">autorenew</span>
         {{ runningMessage }}
       </div>
 
@@ -139,6 +142,7 @@
       @toggle-mute="setMute(!isMuted)"
       @select="select"
       @open-settings="openSettings()"
+      :send-text="sendTypedText"
     />
 
     <SettingsPanel
@@ -462,6 +466,14 @@ async function toggleChat() {
   }
   caption.value = "";
   await session.startChat();
+}
+
+// Typed in the control bar while muted: the user speaking, so a step that
+// waits for them ("next") or a sequence they stop ("stop") hears it.
+function sendTypedText(text: string): boolean {
+  console.info("[typed] message", text);
+  sequence.userSpoke();
+  return sendUserText(text);
 }
 
 // Views (a quiz answer, a form) talk to the model as the user.
